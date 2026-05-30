@@ -1,17 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrDownloadQuran } from '@/services/quranService';
 import { colors } from '@/theme/colors';
 
 export default function QuranListScreen() {
+  const insets = useSafeAreaInsets();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quran-full'],
     queryFn: getOrDownloadQuran
   });
 
   if (isLoading) {
-    return <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />;
+    return (
+      <View style={[styles.skeletonWrap, { paddingTop: Math.max(insets.top + 18, 24) }]}>
+        <View style={styles.skeletonRow} />
+        <View style={styles.skeletonRow} />
+        <View style={styles.skeletonRow} />
+        <View style={styles.skeletonRow} />
+        <View style={styles.skeletonRow} />
+      </View>
+    );
   }
 
   const surahs = data?.surahs ?? [];
@@ -81,6 +91,18 @@ export default function QuranListScreen() {
 }
 
 const styles = StyleSheet.create({
+  skeletonWrap: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  skeletonRow: {
+    height: 70,
+    borderRadius: 14,
+    backgroundColor: '#ECE7DC',
+  },
   listContent: {
     paddingTop: 12,
     paddingHorizontal: 12,

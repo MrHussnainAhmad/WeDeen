@@ -22,7 +22,7 @@ export default function TabsLayout() {
         name="hijri"
         options={{
           title: 'Timings',
-          headerShown: true,
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <Ionicons name="time" color={color} size={size} />
         }}
       />
@@ -38,7 +38,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          headerShown: true,
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />
         }}
       />

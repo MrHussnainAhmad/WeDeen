@@ -36,20 +36,26 @@ function normalizeSurahAudioMapShape(
 }
 
 export async function getOrDownloadQuran() {
+  const cached = await AsyncStorage.getItem(QURAN_KEY);
+  if (cached) {
+    try {
+      return normalizeQuranPayload(JSON.parse(cached));
+    } catch {
+      await AsyncStorage.removeItem(QURAN_KEY);
+    }
+  }
+
+  const { data } = await ummahApi.get('/quran/quran-uthmani');
+  await AsyncStorage.setItem(QURAN_KEY, JSON.stringify(data));
+  return normalizeQuranPayload(data);
+}
+
+export async function refreshQuranCacheInBackground() {
   try {
     const { data } = await ummahApi.get('/quran/quran-uthmani');
     await AsyncStorage.setItem(QURAN_KEY, JSON.stringify(data));
-    return normalizeQuranPayload(data);
-  } catch (error) {
-    const cached = await AsyncStorage.getItem(QURAN_KEY);
-    if (cached) {
-      try {
-        return normalizeQuranPayload(JSON.parse(cached));
-      } catch {
-        await AsyncStorage.removeItem(QURAN_KEY);
-      }
-    }
-    throw error;
+  } catch {
+    // Keep existing cache if refresh fails.
   }
 }
 

@@ -1,8 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
-import { useLayoutEffect, useState } from 'react';
-import { router, useNavigation } from 'expo-router';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { router } from 'expo-router';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { forgotPassword, login, me, register } from '@/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
@@ -10,6 +11,7 @@ import { colors } from '@/theme/colors';
 type AuthMode = 'signin' | 'signup';
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<AuthMode>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,14 +24,6 @@ export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const setAuth = useAuthStore((s) => s.setAuth);
   const logout = useAuthStore((s) => s.logout);
-  const navigation = useNavigation();
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: !!token,
-      title: 'Profile',
-    });
-  }, [navigation, token]);
 
   const authMutation = useMutation({
     mutationFn: async () => {
@@ -59,11 +53,28 @@ export default function ProfileScreen() {
 
   if (!token) {
     return (
-      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-      <ScrollView style={styles.screen} contentContainerStyle={[styles.container, styles.authContainer]} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}
+      >
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[styles.container, styles.authContainer, { paddingTop: Math.max(insets.top + 96, 120) }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      >
+        <Image source={require('@/assets/images/logo.png')} style={styles.authBgImageTop} resizeMode="contain" />
+        <Image source={require('@/assets/images/kaaba.png')} style={styles.authBgImageBottom} resizeMode="contain" />
         <View style={styles.authHero}>
+          <View style={styles.authHeroGlowTop} />
+          <View style={styles.authHeroGlowBottom} />
+          <Pressable onPress={() => router.push('/settings')} style={styles.authSettingsFab}>
+            <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+          </Pressable>
           <View style={styles.authIconWrap}>
-            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
+            <Ionicons name="person-circle-outline" size={28} color="#FFFFFF" />
           </View>
           <Text style={styles.authHeroTitle}>
             {mode === 'signup' ? 'Create Your Account' : 'Welcome Back'}
@@ -71,97 +82,96 @@ export default function ProfileScreen() {
           <Text style={styles.authHeroSub}>
             {mode === 'signup' ? 'Join and sync your Quran journey across devices.' : 'Sign in to continue your Quran learning progress.'}
           </Text>
+          <View style={styles.modeSwitch}>
+            <Pressable
+              onPress={() => setMode('signup')}
+              style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
+            >
+              <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>Signup</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMode('signin')}
+              style={[styles.modeButton, mode === 'signin' && styles.modeButtonActive]}
+            >
+              <Text style={[styles.modeButtonText, mode === 'signin' && styles.modeButtonTextActive]}>Sign In</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.modeSwitch}>
-          <Pressable
-            onPress={() => setMode('signup')}
-            style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
-          >
-            <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>Signup</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setMode('signin')}
-            style={[styles.modeButton, mode === 'signin' && styles.modeButtonActive]}
-          >
-            <Text style={[styles.modeButtonText, mode === 'signin' && styles.modeButtonTextActive]}>Sign In</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.card}>
+        <View style={[styles.card, styles.authMainCard]}>
           <Text style={styles.cardTitle}>{mode === 'signup' ? 'Account Details' : 'Sign In Details'}</Text>
 
-        {mode === 'signup' ? (
+          {mode === 'signup' ? (
+            <TextInput
+              placeholder="Name"
+              value={name}
+              onChangeText={setName}
+              placeholderTextColor="#8E9B95"
+              style={styles.input}
+            />
+          ) : null}
+
           <TextInput
-            placeholder="Name"
-            value={name}
-            onChangeText={setName}
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
             placeholderTextColor="#8E9B95"
             style={styles.input}
           />
-        ) : null}
-
-        <TextInput
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholderTextColor="#8E9B95"
-          style={styles.input}
-        />
-        <View style={styles.passwordField}>
-          <TextInput
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            placeholderTextColor="#8E9B95"
-            style={styles.passwordInput}
-          />
-          <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
-            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6A7B74" />
-          </Pressable>
-        </View>
-
-        {mode === 'signup' ? (
           <View style={styles.passwordField}>
             <TextInput
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry={!showConfirmPassword}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
               placeholderTextColor="#8E9B95"
               style={styles.passwordInput}
             />
-            <Pressable onPress={() => setShowConfirmPassword((v) => !v)} hitSlop={8}>
-              <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6A7B74" />
+            <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6A7B74" />
             </Pressable>
           </View>
-        ) : null}
 
-        <Pressable
-          onPress={() => authMutation.mutate()}
-          disabled={authMutation.isPending}
-          style={[styles.actionButton, styles.primaryButton, authMutation.isPending && styles.buttonDisabled]}
-        >
-          {authMutation.isPending ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.actionButtonText}>{mode === 'signup' ? 'Signing up...' : 'Signing in...'}</Text>
+          {mode === 'signup' ? (
+            <View style={styles.passwordField}>
+              <TextInput
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                placeholderTextColor="#8E9B95"
+                style={styles.passwordInput}
+              />
+              <Pressable onPress={() => setShowConfirmPassword((v) => !v)} hitSlop={8}>
+                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6A7B74" />
+              </Pressable>
             </View>
-          ) : (
-            <Text style={styles.actionButtonText}>
-              {mode === 'signup' ? 'Signup' : 'Sign In'}
-            </Text>
-          )}
-        </Pressable>
+          ) : null}
 
-        {mode === 'signin' ? (
-          <Pressable onPress={() => forgotPasswordMutation.mutate()} style={styles.linkButton}>
-            <Text style={styles.linkText}>Reset password</Text>
+          <Pressable
+            onPress={() => authMutation.mutate()}
+            disabled={authMutation.isPending}
+            style={[styles.actionButton, styles.primaryButton, authMutation.isPending && styles.buttonDisabled]}
+          >
+            {authMutation.isPending ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.actionButtonText}>{mode === 'signup' ? 'Signing up...' : 'Signing in...'}</Text>
+              </View>
+            ) : (
+              <Text style={styles.actionButtonText}>
+                {mode === 'signup' ? 'Signup' : 'Sign In'}
+              </Text>
+            )}
           </Pressable>
-        ) : null}
+
+          {mode === 'signin' ? (
+            <Pressable onPress={() => forgotPasswordMutation.mutate()} style={styles.linkButton}>
+              <Text style={styles.linkText}>Reset password</Text>
+            </Pressable>
+          ) : null}
 
           <Pressable onPress={() => setMode(mode === 'signup' ? 'signin' : 'signup')} style={styles.linkButton}>
             <Text style={styles.linkText}>
@@ -175,7 +185,11 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 18, 24) }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.profileHero}>
         <View style={styles.profileIconCircle}>
           <Ionicons name="person" size={24} color={colors.primary} />
@@ -210,54 +224,111 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   authContainer: {
-    paddingTop: 84,
+    paddingBottom: 64,
+    overflow: 'hidden',
+  },
+  authBgImageTop: {
+    position: 'absolute',
+    top: 30,
+    right: -18,
+    width: 110,
+    height: 110,
+    opacity: 0.09,
+    transform: [{ rotate: '-12deg' }],
+  },
+  authBgImageBottom: {
+    position: 'absolute',
+    bottom: 28,
+    left: -8,
+    width: 84,
+    height: 84,
+    opacity: 0.08,
+    transform: [{ rotate: '10deg' }],
   },
   authHero: {
-    backgroundColor: '#ECF6F2',
-    borderColor: '#D8ECE4',
+    backgroundColor: '#0F7A5A',
+    borderColor: '#0B5F46',
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  authHeroGlowTop: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    top: -40,
+    right: -20,
+  },
+  authHeroGlowBottom: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    bottom: -30,
+    left: -15,
+  },
+  authSettingsFab: {
+    position: 'absolute',
+    top: 18,
+    right: 16,
+    zIndex: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   authIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   authHeroTitle: {
-    color: colors.text,
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 20,
   },
   authHeroSub: {
-    color: colors.muted,
+    color: 'rgba(255,255,255,0.9)',
     marginTop: 4,
     fontWeight: '500',
     lineHeight: 20,
   },
+  authMainCard: {
+    marginTop: -8,
+    borderRadius: 16,
+  },
   modeSwitch: {
     flexDirection: 'row',
-    backgroundColor: '#EAF2EF',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 999,
     padding: 4,
+    marginTop: 12,
+    alignSelf: 'center',
   },
   modeButton: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 9,
+    minWidth: 94,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
     alignItems: 'center',
   },
   modeButtonActive: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#D6E8E1',
+    backgroundColor: '#FFFFFF',
   },
   modeButtonText: {
-    color: colors.muted,
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: '700',
   },
   modeButtonTextActive: {

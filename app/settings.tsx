@@ -162,65 +162,74 @@ export default function SettingsScreen() {
         )}
       </Pressable>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Update Password</Text>
-        <TextInput
-          placeholder="Current Password"
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secureTextEntry
-          placeholderTextColor="#8E9B95"
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="New Password"
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry
-          placeholderTextColor="#8E9B95"
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Confirm New Password"
-          value={confirmNewPassword}
-          onChangeText={setConfirmNewPassword}
-          secureTextEntry
-          placeholderTextColor="#8E9B95"
-          style={styles.input}
-        />
-        <Pressable
-          onPress={() => changePasswordMutation.mutate()}
-          disabled={changePasswordMutation.isPending}
-          style={[styles.inlineButton, changePasswordMutation.isPending && styles.disabledButton]}
-        >
-          {changePasswordMutation.isPending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.inlineButtonText}>Update Password</Text>
-          )}
-        </Pressable>
-      </View>
+      {token ? (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Update Password</Text>
+            <TextInput
+              placeholder="Current Password"
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+              placeholderTextColor="#8E9B95"
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="New Password"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+              placeholderTextColor="#8E9B95"
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Confirm New Password"
+              value={confirmNewPassword}
+              onChangeText={setConfirmNewPassword}
+              secureTextEntry
+              placeholderTextColor="#8E9B95"
+              style={styles.input}
+            />
+            <Pressable
+              onPress={() => changePasswordMutation.mutate()}
+              disabled={changePasswordMutation.isPending}
+              style={[styles.inlineButton, changePasswordMutation.isPending && styles.disabledButton]}
+            >
+              {changePasswordMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.inlineButtonText}>Update Password</Text>
+              )}
+            </Pressable>
+          </View>
 
-      <Pressable
-        onPress={() =>
-          Alert.alert('Delete Account', 'This action is permanent. Continue?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => deleteMutation.mutate(),
-            },
-          ])
-        }
-        style={[styles.dangerButton, deleteMutation.isPending && styles.disabledButton]}
-        disabled={deleteMutation.isPending}
-      >
-        {deleteMutation.isPending ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text style={styles.saveButtonText}>Delete Account</Text>
-        )}
-      </Pressable>
+          <Pressable
+            onPress={() =>
+              Alert.alert('Delete Account', 'This action is permanent. Continue?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => deleteMutation.mutate(),
+                },
+              ])
+            }
+            style={[styles.dangerButton, deleteMutation.isPending && styles.disabledButton]}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Delete Account</Text>
+            )}
+          </Pressable>
+        </>
+      ) : (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Account Security</Text>
+          <Text style={styles.infoText}>Login to access Update Password and Delete Account.</Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -300,4 +309,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   disabledButton: { opacity: 0.7 },
+  infoText: {
+    color: colors.muted,
+    fontWeight: '600',
+  },
 });

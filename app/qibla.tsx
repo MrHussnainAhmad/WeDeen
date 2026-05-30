@@ -82,6 +82,10 @@ export default function QiblaScreen() {
     if (qiblaBearing === null || heading === null) return 0;
     return normalizeDelta(qiblaBearing, heading);
   }, [qiblaBearing, heading]);
+  const northMarkerRotation = useMemo(() => {
+    if (heading === null) return 0;
+    return -heading;
+  }, [heading]);
 
   useEffect(() => {
     const current = currentNeedleDeg.current;
@@ -137,10 +141,17 @@ export default function QiblaScreen() {
             backgroundColor: '#FAFCFB'
           }}
         >
-          <View style={{ position: 'absolute', top: 8, alignItems: 'center' }}>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: 8,
+              alignItems: 'center',
+              transform: [{ rotate: `${northMarkerRotation}deg` }]
+            }}
+          >
             <Image source={require('@/assets/images/kaaba.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
             <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 10, marginTop: 1 }}>N</Text>
-          </View>
+          </Animated.View>
 
           <View
             style={{

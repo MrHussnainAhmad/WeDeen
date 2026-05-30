@@ -91,15 +91,23 @@ export default function HomeScreen() {
   const [showHadithLangs, setShowHadithLangs] = useState(false);
   const [reminderTranslated, setReminderTranslated] = useState<string | null>(null);
   const [hadithTranslated, setHadithTranslated] = useState<string | null>(null);
+  const [reminderLang, setReminderLang] = useState<string | null>(null);
+  const [hadithLang, setHadithLang] = useState<string | null>(null);
   const [translatingReminder, setTranslatingReminder] = useState(false);
   const [translatingHadith, setTranslatingHadith] = useState(false);
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Fetching today's blessings...</Text>
-      </View>
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.loadingSkeletonContainer}>
+        <View style={styles.skeletonHero} />
+        <View style={styles.skeletonCardLarge} />
+        <View style={styles.skeletonRow}>
+          <View style={styles.skeletonHalf} />
+          <View style={styles.skeletonHalf} />
+        </View>
+        <View style={styles.skeletonCard} />
+        <View style={styles.skeletonCard} />
+      </ScrollView>
     );
   }
 
@@ -112,6 +120,7 @@ export default function HomeScreen() {
     try {
       const translated = await translateText(data.reminder, lang);
       setReminderTranslated(translated);
+      setReminderLang(lang);
     } finally {
       setTranslatingReminder(false);
       setShowReminderLangs(false);
@@ -124,6 +133,7 @@ export default function HomeScreen() {
     try {
       const translated = await translateText(data.hadith, lang);
       setHadithTranslated(translated);
+      setHadithLang(lang);
     } finally {
       setTranslatingHadith(false);
       setShowHadithLangs(false);
@@ -161,7 +171,7 @@ export default function HomeScreen() {
         <View style={styles.quranPosterContent}>
           {/* Left: Text + Button */}
           <View style={styles.quranPosterLeft}>
-            <Text style={styles.quranPosterArabic}>ٱلْقُرْءَانُ ٱلْكَرِيمُ</Text>
+            <Text style={styles.quranPosterArabic}>{'\u0671\u0644\u0652\u0642\u064f\u0631\u0652\u0622\u0646\u064f \u0671\u0644\u0652\u0643\u064e\u0631\u0650\u064a\u0645\u064f'}</Text>
             <Text style={styles.quranPosterTitle}>The Noble Quran</Text>
             <Text style={styles.quranPosterSub}>"Guidance and light for mankind."</Text>
 
@@ -262,7 +272,9 @@ export default function HomeScreen() {
           <FontAwesome6 name="quote-left" size={16} color="rgba(15, 122, 90, 0.12)" style={styles.quoteIcon} />
           <Text style={[
             styles.verseText,
-            hasArabic(reminderText) && styles.arabicFont
+            hasArabic(reminderText) && styles.arabicFont,
+            reminderLang === 'ur' && styles.urduFont,
+            (reminderLang === 'fr' || reminderLang === 'tr') && styles.latinFont
           ]}>
             {reminderText}
           </Text>
@@ -273,6 +285,7 @@ export default function HomeScreen() {
             onPress={() => {
               if (reminderTranslated) {
                 setReminderTranslated(null);
+                setReminderLang(null);
                 setShowReminderLangs(false);
                 return;
               }
@@ -318,7 +331,9 @@ export default function HomeScreen() {
           <FontAwesome6 name="quote-left" size={16} color="rgba(197, 155, 39, 0.12)" style={styles.quoteIcon} />
           <Text style={[
             styles.verseText,
-            hasArabic(hadithText) && styles.arabicFont
+            hasArabic(hadithText) && styles.arabicFont,
+            hadithLang === 'ur' && styles.urduFont,
+            (hadithLang === 'fr' || hadithLang === 'tr') && styles.latinFont
           ]}>
             {hadithText}
           </Text>
@@ -329,6 +344,7 @@ export default function HomeScreen() {
             onPress={() => {
               if (hadithTranslated) {
                 setHadithTranslated(null);
+                setHadithLang(null);
                 setShowHadithLangs(false);
                 return;
               }
@@ -446,6 +462,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  loadingSkeletonContainer: {
+    padding: 18,
+    gap: 12,
+  },
+  skeletonHero: {
+    height: 170,
+    borderRadius: 16,
+    backgroundColor: '#ECE7DC',
+  },
+  skeletonCardLarge: {
+    height: 110,
+    borderRadius: 16,
+    backgroundColor: '#ECE7DC',
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  skeletonHalf: {
+    flex: 1,
+    height: 120,
+    borderRadius: 16,
+    backgroundColor: '#ECE7DC',
+  },
+  skeletonCard: {
+    height: 120,
+    borderRadius: 16,
+    backgroundColor: '#ECE7DC',
   },
 
   // ─── Quran Poster ───────────────────────────────────────────────────────────
@@ -696,6 +741,15 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     color: THEME.primaryDark,
   },
+  urduFont: {
+    fontFamily: 'NotoNastaliqUrdu',
+    fontSize: 20,
+    lineHeight: 34,
+    textAlign: 'right',
+  },
+  latinFont: {
+    fontFamily: 'NotoSans',
+  },
   cardActionRow: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(230, 224, 213, 0.6)',
@@ -860,3 +914,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+

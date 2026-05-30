@@ -6,9 +6,11 @@ import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/theme/colors';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 import { playManagedAudio } from '@/services/audioManager';
+import { schedulePrayerNotificationsForToday } from '@/services/prayerNotificationService';
 
 type SavedLocation = {
   mode: 'coords' | 'city';
@@ -23,6 +25,7 @@ const LOCATION_KEY = 'timings_location_v1';
 const ADHAN_KEY = 'adhan_file_path_v1';
 const PLAYED_KEY = 'played_prayer_mark_v1';
 const ADHAN_URL = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg';
+const TIMINGS_CACHE_PREFIX = 'timings_cache_v1_';
 
 const PRAYER_KEYS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 const KAABA_LAT = 21.4225;
@@ -103,6 +106,13 @@ async function saveLocation(loc: SavedLocation) {
   await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(loc));
 }
 
+function getLocationCacheKey(loc: SavedLocation) {
+  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
+    return `coords_${loc.latitude.toFixed(4)}_${loc.longitude.toFixed(4)}`;
+  }
+  return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
+}
+
 async function ensureAdhanFile() {
   const existing = await AsyncStorage.getItem(ADHAN_KEY);
   if (existing) {
@@ -127,6 +137,7 @@ async function playAdhan() {
 }
 
 export default function TimingsScreen() {
+  const insets = useSafeAreaInsets();
   const [locationLoading, setLocationLoading] = useState(true);
   const [location, setLocation] = useState<SavedLocation | null>(null);
   const [manualCity, setManualCity] = useState('');
@@ -137,6 +148,7 @@ export default function TimingsScreen() {
   const [showQibla, setShowQibla] = useState(false);
   const [heading, setHeading] = useState<number | null>(null);
   const [qiblaCoords, setQiblaCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
 
   const now = new Date();
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth() + 1);
@@ -147,6 +159,7 @@ export default function TimingsScreen() {
     const tick = setInterval(() => {
       const next = todayKey();
       setTodayDateKey((prev) => (prev === next ? prev : next));
+      setNowTick(Date.now());
     }, 60 * 1000);
     return () => clearInterval(tick);
   }, []);
@@ -209,7 +222,7 @@ export default function TimingsScreen() {
       }
 
       const saved = await getSavedLocation();
-      if (saved?.locked) {
+      if (saved) {
         if (!mounted) return;
         setLocation(saved);
         setLocationLoading(false);
@@ -232,7 +245,7 @@ export default function TimingsScreen() {
             country,
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
-            locked: false
+            locked: true
           };
           await saveLocation(autoLoc);
           if (!mounted) return;
@@ -262,6 +275,7 @@ export default function TimingsScreen() {
     queryFn: async () => {
       if (!location) return null;
       const date = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
+      const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`;
       let url = '';
 
       if (location.mode === 'coords' && location.latitude && location.longitude) {
@@ -269,19 +283,32 @@ export default function TimingsScreen() {
       } else {
         url = `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=2`;
       }
-
-      const res = await fetch(url);
-      const json = await res.json();
-      const timings = json?.data?.timings || {};
-      return {
-        fajr: normalizeTime(timings.Fajr),
-        dhuhr: normalizeTime(timings.Dhuhr),
-        asr: normalizeTime(timings.Asr),
-        maghrib: normalizeTime(timings.Maghrib),
-        isha: normalizeTime(timings.Isha),
-        hijriReadable:
-          `${json?.data?.date?.hijri?.day ?? ''} ${json?.data?.date?.hijri?.month?.en ?? ''} ${json?.data?.date?.hijri?.year ?? ''} AH`.trim()
-      };
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        const timings = json?.data?.timings || {};
+        const payload = {
+          fajr: normalizeTime(timings.Fajr),
+          dhuhr: normalizeTime(timings.Dhuhr),
+          asr: normalizeTime(timings.Asr),
+          maghrib: normalizeTime(timings.Maghrib),
+          isha: normalizeTime(timings.Isha),
+          hijriReadable:
+            `${json?.data?.date?.hijri?.day ?? ''} ${json?.data?.date?.hijri?.month?.en ?? ''} ${json?.data?.date?.hijri?.year ?? ''} AH`.trim()
+        };
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(payload));
+        return payload;
+      } catch {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            return JSON.parse(cached);
+          } catch {
+            await AsyncStorage.removeItem(cacheKey);
+          }
+        }
+        throw new Error('Unable to load prayer timings.');
+      }
     }
   });
 
@@ -329,12 +356,24 @@ export default function TimingsScreen() {
     runCheck().catch(() => undefined);
     timerRef.current = setInterval(() => {
       runCheck().catch(() => undefined);
-    }, 20_000);
+    }, 10_000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [timingsQuery.data]);
+
+  useEffect(() => {
+    if (!timingsQuery.data || !location) return;
+    const data = timingsQuery.data;
+    schedulePrayerNotificationsForToday([
+      { label: 'Fajr', time: data.fajr },
+      { label: 'Dhuhr', time: data.dhuhr },
+      { label: 'Asr', time: data.asr },
+      { label: 'Maghrib', time: data.maghrib },
+      { label: 'Isha', time: data.isha },
+    ]).catch(() => undefined);
+  }, [timingsQuery.data, location?.city, location?.country, location?.latitude, location?.longitude, location?.mode]);
 
   const hijriCells = useMemo(() => {
     const rows = monthCalendarQuery.data || [];
@@ -413,7 +452,7 @@ export default function TimingsScreen() {
 
     const tomorrowFajr = parsePrayerDate(entries[0].value, new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() + 1));
     return { ...entries[0], countdown: getCountdownText(tomorrowFajr, nowDate) };
-  }, [timingsQuery.data]);
+  }, [timingsQuery.data, nowTick]);
 
   const todayGregorianDay = String(new Date().getDate());
   const qiblaBearing = qiblaCoords ? calculateQiblaBearing(qiblaCoords.lat, qiblaCoords.lon) : null;
@@ -422,7 +461,11 @@ export default function TimingsScreen() {
     qiblaBearing !== null && heading !== null ? ((qiblaBearing - heading + 540) % 360) - 180 : null;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 18, 24) }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.heroCard}>
         <View style={styles.heroDecorOne} />
         <View style={styles.heroDecorTwo} />

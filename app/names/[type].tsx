@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { playManagedAudio, stopAllAudio } from '@/services/audioManager';
@@ -41,6 +42,9 @@ const MUHAMMAD_STARTER = [
   'Yasin',
   'Abul-Qasim',
 ];
+const ALLAH_NAMES_CACHE_KEY = 'names_allah_cache_v1';
+const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v1';
+const NAMES_DOWNLOAD_FLAG_PREFIX = 'names_downloaded_v1_';
 
 function buildMuhammadFallback(): NameItem[] {
   return Array.from({ length: 99 }, (_, index) => {
@@ -74,6 +78,29 @@ async function fetchAllahNames(): Promise<NameItem[]> {
     .slice(0, 99);
 }
 
+async function getCachedNames(type: 'allah' | 'muhammad'): Promise<NameItem[] | null> {
+  const key = type === 'allah' ? ALLAH_NAMES_CACHE_KEY : MUHAMMAD_NAMES_CACHE_KEY;
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as any[];
+    if (!Array.isArray(parsed)) return null;
+    if (type === 'muhammad') return parsed as NameItem[];
+    return parsed
+      .map((item) => ({
+        id: item.number,
+        arabic: item.name?.arabic || `اسم ${item.number}`,
+        transliteration: item.name?.transliteration || `Name ${item.number}`,
+        meaning: item.name?.translated || item.meaning,
+        audioUrl: item.audio_url,
+      }))
+      .sort((a, b) => a.id - b.id)
+      .slice(0, 99);
+  } catch {
+    return null;
+  }
+}
+
 export default function NamesDetailScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
   const normalizedType = type === 'muhammad' ? 'muhammad' : 'allah';
@@ -94,21 +121,56 @@ export default function NamesDetailScreen() {
     const load = async () => {
       setIsLoading(true);
       setFetchError(null);
-      setIsDownloaded(false);
       setPlayingId(null);
+      const downloadFlag = await AsyncStorage.getItem(`${NAMES_DOWNLOAD_FLAG_PREFIX}${normalizedType}`);
+      setIsDownloaded(downloadFlag === '1');
       try {
         if (normalizedType === 'allah') {
+          const cached = await getCachedNames('allah');
+          if (cached?.length) {
+            if (!mounted) return;
+            setNames(cached);
+            setIsLoading(false);
+          }
           const apiNames = await fetchAllahNames();
           if (!mounted) return;
           setNames(apiNames);
+          await AsyncStorage.setItem(
+            ALLAH_NAMES_CACHE_KEY,
+            JSON.stringify(
+              apiNames.map((item) => ({
+                number: item.id,
+                name: {
+                  arabic: item.arabic,
+                  transliteration: item.transliteration,
+                  translated: item.meaning,
+                },
+                meaning: item.meaning,
+                audio_url: item.audioUrl,
+              }))
+            )
+          );
         } else {
+          const cached = await getCachedNames('muhammad');
           if (!mounted) return;
-          setNames(buildMuhammadFallback());
+          if (cached?.length) {
+            setNames(cached);
+          } else {
+            const fallback = buildMuhammadFallback();
+            setNames(fallback);
+            await AsyncStorage.setItem(MUHAMMAD_NAMES_CACHE_KEY, JSON.stringify(fallback));
+          }
+          if (!mounted) return;
         }
       } catch (error: any) {
         if (!mounted) return;
         setFetchError(error?.message || 'Unable to fetch names.');
-        setNames(normalizedType === 'allah' ? [] : buildMuhammadFallback());
+        const cached = await getCachedNames(normalizedType);
+        if (cached?.length) {
+          setNames(cached);
+        } else {
+          setNames(normalizedType === 'allah' ? [] : buildMuhammadFallback());
+        }
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -140,6 +202,7 @@ export default function NamesDetailScreen() {
 
     if (normalizedType === 'muhammad') {
       setIsDownloaded(true);
+      await AsyncStorage.setItem(`${NAMES_DOWNLOAD_FLAG_PREFIX}${normalizedType}`, '1');
       Alert.alert('Ready', 'Muhammad names are loaded. Audio source is not available from the current API.');
       return;
     }
@@ -163,6 +226,7 @@ export default function NamesDetailScreen() {
           })
       );
       setIsDownloaded(true);
+      await AsyncStorage.setItem(`${NAMES_DOWNLOAD_FLAG_PREFIX}${normalizedType}`, '1');
       Alert.alert('Download complete', 'All 99 names are ready for listening.');
     } catch (error: any) {
       Alert.alert('Download failed', error?.message || 'Could not verify all audio files.');
@@ -240,8 +304,17 @@ export default function NamesDetailScreen() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerCard}>
+    <FlatList
+      data={isLoading ? [] : names}
+      keyExtractor={(item) => `${item.id}`}
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      removeClippedSubviews
+      initialNumToRender={14}
+      maxToRenderPerBatch={18}
+      windowSize={9}
+      ListHeaderComponent={
+        <View style={styles.headerCard}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>Read every name here. Listening unlocks after you download all 99 names.</Text>
         {fetchError ? <Text style={styles.errorText}>{fetchError}</Text> : null}
@@ -266,37 +339,37 @@ export default function NamesDetailScreen() {
             <Text style={styles.playAllText}>{isPlayingAll ? 'Stop Play All' : 'Play All 99 Names'}</Text>
           </Pressable>
         ) : null}
-      </View>
-
-      <View style={styles.listCard}>
-        {isLoading ? (
-          <View style={styles.loadingWrap}>
+        </View>
+      }
+      ListEmptyComponent={
+        isLoading ? (
+          <View style={[styles.listCard, styles.loadingWrap]}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.loadingText}>Fetching names from Islamic API...</Text>
           </View>
-        ) : (
-          names.map((item) => (
-            <View key={item.id} style={styles.row}>
-              <View style={styles.indexBubble}>
-                <Text style={styles.indexText}>{item.id}</Text>
-              </View>
-              <View style={styles.textBlock}>
-                <Text style={styles.arabic}>{item.arabic}</Text>
-                <Text style={styles.transliteration}>{item.transliteration}</Text>
-                {item.meaning ? <Text style={styles.meaning}>{item.meaning}</Text> : null}
-              </View>
-              <Pressable onPress={() => void onListen(item)} style={({ pressed }) => [styles.listenBtn, pressed && styles.pressed]}>
-                <MaterialCommunityIcons
-                  name={playingId === item.id ? 'pause-circle-outline' : 'play-circle-outline'}
-                  size={20}
-                  color={colors.primary}
-                />
-              </Pressable>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+        ) : null
+      }
+      renderItem={({ item }) => (
+        <View style={styles.row}>
+          <View style={styles.indexBubble}>
+            <Text style={styles.indexText}>{item.id}</Text>
+          </View>
+          <View style={styles.textBlock}>
+            <Text style={styles.arabic}>{item.arabic}</Text>
+            <Text style={styles.transliteration}>{item.transliteration}</Text>
+            {item.meaning ? <Text style={styles.meaning}>{item.meaning}</Text> : null}
+          </View>
+          <Pressable onPress={() => void onListen(item)} style={({ pressed }) => [styles.listenBtn, pressed && styles.pressed]}>
+            <MaterialCommunityIcons
+              name={playingId === item.id ? 'pause-circle-outline' : 'play-circle-outline'}
+              size={20}
+              color={colors.primary}
+            />
+          </Pressable>
+        </View>
+      )}
+      ListFooterComponent={<View style={styles.listBottomGap} />}
+    />
   );
 }
 
@@ -375,6 +448,7 @@ const styles = StyleSheet.create({
   },
   loadingWrap: {
     paddingVertical: 18,
+    marginTop: 12,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -385,6 +459,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   row: {
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 9,
@@ -392,6 +467,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1ECE2',
     gap: 10,
+  },
+  listBottomGap: {
+    height: 8,
   },
   indexBubble: {
     width: 28,

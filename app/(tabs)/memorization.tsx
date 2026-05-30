@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
 import { fetchLearningProgress, unlockNextSurah } from '@/services/memorizationService';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
@@ -38,6 +39,9 @@ const ISLAMIC_LANDMARKS = [
 export default function MemorizationScreen() {
   const queryClient = useQueryClient();
   const token = useAuthStore((s) => s.token);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const autoScrolledRef = useRef(false);
+  const targetYRef = useRef<number | null>(null);
 
   const progressQuery = useQuery({
     queryKey: ['learning-progress', token],
@@ -52,6 +56,12 @@ export default function MemorizationScreen() {
     }
   });
 
+  const unlockedSurah = progressQuery.data?.unlockedSurah ?? 1;
+
+  useEffect(() => {
+    autoScrolledRef.current = false;
+  }, [unlockedSurah]);
+
   if (!token) {
     return (
       <View style={styles.centerContainer}>
@@ -65,14 +75,13 @@ export default function MemorizationScreen() {
     return <ActivityIndicator style={styles.loader} color={colors.primary} />;
   }
 
-  const unlockedSurah = progressQuery.data?.unlockedSurah ?? 1;
   const startSurah = Math.max(1, unlockedSurah - 8);
   const endSurah = Math.min(TOTAL_SURAHS, startSurah + VISIBLE_MAP_NODES - 1);
   const mapSurahs = Array.from({ length: endSurah - startSurah + 1 }, (_, i) => startSurah + i);
   const renderedMapSurahs = [...mapSurahs].reverse();
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.heroCard}>
         <View style={styles.heroGlowLeft} />
         <View style={styles.heroGlowRight} />
@@ -118,7 +127,28 @@ export default function MemorizationScreen() {
                   </View>
                 </View>
               ) : null}
-              <View style={[styles.nodeRow, laneStyle]}>
+              <View
+                style={[styles.nodeRow, laneStyle]}
+                onLayout={(event) => {
+                  if (!isCurrent || autoScrolledRef.current) return;
+                  const y = event.nativeEvent.layout.y;
+                  targetYRef.current = y;
+                  autoScrolledRef.current = true;
+                  requestAnimationFrame(() => {
+                    scrollRef.current?.scrollTo({
+                      y: Math.max(0, y - 180),
+                      animated: true,
+                    });
+                  });
+                  setTimeout(() => {
+                    if (targetYRef.current === null) return;
+                    scrollRef.current?.scrollTo({
+                      y: Math.max(0, targetYRef.current - 180),
+                      animated: true,
+                    });
+                  }, 320);
+                }}
+              >
                 <Pressable
                   onPress={() => (isUnlocked ? router.push(`/quran/${surahNumber}`) : undefined)}
                   style={[
