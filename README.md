@@ -1,16 +1,14 @@
-# WeDeen UI
+# Private Property Notice
 
-Expo Router + React Native app for WeDeen.
+This `ui` codebase is private and proprietary property of the WeDeen project owner.
 
-## Setup
+## Restrictions
+- No unauthorized copying, sharing, publishing, or redistribution.
+- No commercial or public reuse without written permission.
+- No reverse engineering, resale, or sublicensing.
 
-```bash
-npm install
-npm run start
-```
+## Access
+Use is limited to explicitly authorized collaborators only.
 
-## Env
-
-Set API URL for Android emulator as needed:
-
-- `EXPO_PUBLIC_BACKEND_URL=http://10.0.2.2:5000/api`
+## Contact
+For permission requests, contact the project owner/maintainer.
