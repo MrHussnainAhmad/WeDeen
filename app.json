@@ -37,7 +37,7 @@
         "expo-notifications",
         {
           "sounds": [
-            "./assets/audio/Allah.m4a"
+            "./assets/audio/adhan_alert.m4a"
           ]
         }
       ]
@@ -54,3 +54,4 @@
     "owner": "hussnainahmadsahi"
   }
 }
+

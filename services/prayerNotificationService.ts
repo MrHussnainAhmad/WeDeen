@@ -46,7 +46,7 @@ export async function configurePrayerNotificationChannel() {
     importance: Notifications.AndroidImportance.MAX,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     vibrationPattern: [0, 250, 250, 250],
-    sound: 'Allah.m4a',
+    sound: 'adhan_alert.m4a',
   });
 }
 
@@ -93,7 +93,7 @@ export async function schedulePrayerNotificationsForToday(prayers: PrayerEntry[]
       content: {
         title: `Adhan Time: ${prayer.label}`,
         body: `It's time for ${prayer.label} prayer.`,
-        sound: 'Allah.m4a',
+        sound: 'adhan_alert.m4a',
         priority: Notifications.AndroidNotificationPriority.MAX,
       },
       trigger: {
@@ -109,3 +109,4 @@ export async function schedulePrayerNotificationsForToday(prayers: PrayerEntry[]
   await AsyncStorage.setItem(PRAYER_NOTIFICATION_SIGNATURE_KEY, signature);
   return true;
 }
+

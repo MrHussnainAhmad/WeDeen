@@ -7,7 +7,7 @@ import { colors } from '@/theme/colors';
 
 export default function QuranListScreen() {
   const insets = useSafeAreaInsets();
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, error, isLoading, isError, refetch } = useQuery({
     queryKey: ['quran-full'],
     queryFn: getOrDownloadQuran
   });
@@ -27,9 +27,12 @@ export default function QuranListScreen() {
   const surahs = data?.surahs ?? [];
 
   if (isError) {
+    const errorMessage =
+      (error as any)?.message ||
+      'Could not load Quran right now.';
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <Text style={{ color: colors.text, marginBottom: 10 }}>Could not load Quran right now.</Text>
+        <Text style={{ color: colors.text, marginBottom: 10, textAlign: 'center' }}>{errorMessage}</Text>
         <Pressable
           onPress={() => refetch()}
           style={{ backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 }}

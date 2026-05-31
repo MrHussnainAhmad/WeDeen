@@ -68,17 +68,42 @@ async function warmupUiAssets() {
   });
 }
 
+async function retryQuranPreload(maxAttempts = 3, delayMs = 1200) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      console.log(`[Boot] Quran preload attempt ${attempt}/${maxAttempts}...`);
+      await getOrDownloadQuran();
+      console.log('[Boot] Quran preload succeeded');
+      return;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[Boot] Quran preload attempt ${attempt} failed:`, errorMsg);
+      lastError = error;
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  const finalError = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`QURAN_PRELOAD_FAILED: ${finalError}`);
+}
+
 export async function shouldRunBootPreload() {
   const done = await AsyncStorage.getItem(BOOT_PRELOAD_DONE_KEY);
   return !done;
 }
 
 export async function runBootPreloadOnce() {
-  await Promise.all([
-    getOrDownloadQuran(),
+  // Quran preload is required for first-launch completion.
+  await retryQuranPreload();
+
+  // Keep these non-blocking so first launch doesn't fail for optional assets.
+  await Promise.allSettled([
     ensureAdhanFile(),
     preloadNamesTextData(),
     warmupUiAssets(),
   ]);
+
   await AsyncStorage.setItem(BOOT_PRELOAD_DONE_KEY, '1');
 }

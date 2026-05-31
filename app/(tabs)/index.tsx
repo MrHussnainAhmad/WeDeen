@@ -98,7 +98,10 @@ export default function HomeScreen() {
 
   if (isLoading) {
     return (
-      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.loadingSkeletonContainer}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.bg }}
+        contentContainerStyle={[styles.loadingSkeletonContainer, { paddingTop: Math.max(insets.top + 22, 28) }]}
+      >
         <View style={styles.skeletonHero} />
         <View style={styles.skeletonCardLarge} />
         <View style={styles.skeletonRow}>

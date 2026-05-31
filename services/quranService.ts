@@ -4,6 +4,8 @@ import { ummahApi } from './http';
 import { playManagedAudio, stopAllAudio } from './audioManager';
 
 const QURAN_KEY = 'quran_uthmani_full_v1';
+const QURAN_FILE_DIR = `${FileSystem.documentDirectory}quran/`;
+const QURAN_FILE_PATH = `${QURAN_FILE_DIR}quran-uthmani-full-v1.json`;
 const AUDIO_MAP_KEY = 'surah_audio_paths_v1';
 const AYAH_AUDIO_MAP_KEY = 'ayah_audio_paths_v1';
 const ACTIVE_RECITER_KEY = 'active_reciter_by_surah_v1';
@@ -12,11 +14,36 @@ let activeSurahDownload: FileSystem.DownloadResumable | null = null;
 let activeAyahDownload: FileSystem.DownloadResumable | null = null;
 let cancelRequested = false;
 let sequenceToken = 0;
+let quranWarmupPromise: Promise<void> | null = null;
+
+function isValidQuranPayload(payload: any) {
+  const normalized = normalizeQuranPayload(payload);
+  // Must have at least 114 surahs (valid Quran)
+  return normalized?.surahs && Array.isArray(normalized.surahs) && normalized.surahs.length >= 114;
+}
 
 function normalizeQuranPayload(payload: any) {
   if (payload?.data?.surahs) return payload.data;
   if (payload?.surahs) return payload;
   return { surahs: [] };
+}
+
+async function readQuranFromFile() {
+  try {
+    const info = await FileSystem.getInfoAsync(QURAN_FILE_PATH);
+    if (!info.exists) return null;
+    const raw = await FileSystem.readAsStringAsync(QURAN_FILE_PATH);
+    const parsed = JSON.parse(raw);
+    if (!isValidQuranPayload(parsed)) return null;
+    return normalizeQuranPayload(parsed);
+  } catch {
+    return null;
+  }
+}
+
+async function writeQuranToFile(payload: any) {
+  await FileSystem.makeDirectoryAsync(QURAN_FILE_DIR, { intermediates: true });
+  await FileSystem.writeAsStringAsync(QURAN_FILE_PATH, JSON.stringify(payload));
 }
 
 function normalizeSurahAudioMapShape(
@@ -36,27 +63,65 @@ function normalizeSurahAudioMapShape(
 }
 
 export async function getOrDownloadQuran() {
-  const cached = await AsyncStorage.getItem(QURAN_KEY);
-  if (cached) {
-    try {
-      return normalizeQuranPayload(JSON.parse(cached));
-    } catch {
-      await AsyncStorage.removeItem(QURAN_KEY);
-    }
-  }
+  const fileCached = await readQuranFromFile();
+  if (fileCached) return fileCached;
 
-  const { data } = await ummahApi.get('/quran/quran-uthmani');
-  await AsyncStorage.setItem(QURAN_KEY, JSON.stringify(data));
+  // Legacy cleanup: older builds stored the entire Quran in AsyncStorage.
+  // On Android this can fail with CursorWindow row-size errors, so we avoid reading it.
+  await AsyncStorage.removeItem(QURAN_KEY).catch(() => undefined);
+
+  const data = await fetchQuranFromNetwork();
+  // Only save valid data to avoid corrupting cache
+  if (isValidQuranPayload(data)) {
+    await writeQuranToFile(data);
+  }
   return normalizeQuranPayload(data);
 }
 
 export async function refreshQuranCacheInBackground() {
   try {
-    const { data } = await ummahApi.get('/quran/quran-uthmani');
-    await AsyncStorage.setItem(QURAN_KEY, JSON.stringify(data));
+    const data = await fetchQuranFromNetwork();
+    // Only update cache if data is valid
+    if (isValidQuranPayload(data)) {
+      await writeQuranToFile(data);
+    }
   } catch {
     // Keep existing cache if refresh fails.
   }
+}
+
+async function fetchQuranFromNetwork() {
+  try {
+    const { data } = await ummahApi.get('/quran/quran-uthmani', { timeout: 30000 });
+    if (isValidQuranPayload(data)) return data;
+  } catch (error) {
+    console.warn('[Quran] UmmahApi fallback:', error instanceof Error ? error.message : String(error));
+    // fall through to public fallback
+  }
+
+  const response = await fetch('https://api.alquran.cloud/v1/quran/quran-uthmani', {
+    timeout: 30000 // Ensure fetch timeout matches API timeout
+  } as any);
+  if (!response.ok) {
+    throw new Error(`QURAN_FETCH_FAILED_${response.status}`);
+  }
+  const data = await response.json();
+  if (!isValidQuranPayload(data)) {
+    throw new Error('QURAN_INVALID_PAYLOAD');
+  }
+  return data;
+}
+
+export function warmQuranCacheInBackground() {
+  if (quranWarmupPromise) return quranWarmupPromise;
+  quranWarmupPromise = (async () => {
+    try {
+      await getOrDownloadQuran();
+    } finally {
+      quranWarmupPromise = null;
+    }
+  })();
+  return quranWarmupPromise;
 }
 
 export async function getReciters() {

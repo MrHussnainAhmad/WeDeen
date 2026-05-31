@@ -25,23 +25,25 @@ export default function RootLayout() {
   }, [hydrate]);
 
   useEffect(() => {
-    if (Constants.appOwnership === 'expo') return;
-    let mounted = true;
-    (async () => {
-      const Notifications = await import('expo-notifications');
-      if (!mounted) return;
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowBanner: true,
-          shouldShowList: true,
-          shouldPlaySound: true,
-          shouldSetBadge: false,
-        }),
-      });
-    })().catch(() => undefined);
-    return () => {
-      mounted = false;
-    };
+    // Skip notification setup in Expo Go; boot preload will run separately
+    if (Constants.appOwnership !== 'expo') {
+      let mounted = true;
+      (async () => {
+        const Notifications = await import('expo-notifications');
+        if (!mounted) return;
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+          }),
+        });
+      })().catch(() => undefined);
+      return () => {
+        mounted = false;
+      };
+    }
   }, []);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function RootLayout() {
     return (
       <Animated.View style={[styles.bootScreen, { opacity: fadeAnim }]}>
         <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.bootTitle}>Downloading Feature</Text>
+        <Text style={styles.bootTitle}>Downloading Features...</Text>
         <ActivityIndicator size="small" color={colors.primary} style={styles.loader} />
       </Animated.View>
     );
