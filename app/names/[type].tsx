@@ -1,10 +1,12 @@
-import { useLocalSearchParams } from 'expo-router';
+﻿import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { playManagedAudio, stopAllAudio } from '@/services/audioManager';
+import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
 type NameItem = {
   id: number;
@@ -25,36 +27,19 @@ type AllahApiResult = {
   audio_url?: string;
 };
 
-const MUHAMMAD_STARTER = [
-  'Muhammad',
-  'Ahmad',
-  'Al-Mahi',
-  'Al-Hashir',
-  'Al-Aqib',
-  'Al-Mustafa',
-  'Al-Mujtaba',
-  'Rasulullah',
-  'Nabiyullah',
-  'Habibullah',
-  'Al-Amin',
-  'As-Sadiq',
-  'Taha',
-  'Yasin',
-  'Abul-Qasim',
-];
 const ALLAH_NAMES_CACHE_KEY = 'names_allah_cache_v1';
-const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v1';
+const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v3';
+const MUHAMMAD_AUDIO_MAP_KEY = 'names_muhammad_audio_map_v1';
 const NAMES_DOWNLOAD_FLAG_PREFIX = 'names_downloaded_v1_';
+const MUHAMMAD_AUDIO_DIR = `${FileSystem.documentDirectory}names-muhammad-audio/`;
 
 function buildMuhammadFallback(): NameItem[] {
-  return Array.from({ length: 99 }, (_, index) => {
-    const starter = MUHAMMAD_STARTER[index];
-    return {
-      id: index + 1,
-      arabic: starter ? `اسم ${index + 1}` : `اسم محمد ${index + 1}`,
-      transliteration: starter || `Muhammad Name ${index + 1}`,
-    };
-  });
+  return MUHAMMAD_99_NAMES.map((item, index) => ({
+    id: index + 1,
+    arabic: `اسم محمد ${index + 1}`,
+    transliteration: item.transliteration,
+    meaning: item.meaning,
+  }));
 }
 
 async function fetchAllahNames(): Promise<NameItem[]> {
@@ -78,6 +63,89 @@ async function fetchAllahNames(): Promise<NameItem[]> {
     .slice(0, 99);
 }
 
+function stripTags(input: string) {
+  return input.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function decodeHtml(input: string) {
+  return input
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function getMuhammadTtsCandidates(text: string) {
+  const encoded = encodeURIComponent(text);
+  return [
+    {
+      url: `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encoded}&tl=ar&client=tw-ob`,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    },
+    {
+      url: `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=ar&client=tw-ob`,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    },
+    {
+      url: `https://api.streamelements.com/kappa/v2/speech?voice=Zeina&text=${encoded}`,
+      headers: undefined as Record<string, string> | undefined,
+    },
+  ];
+}
+
+async function downloadWithFallback(targetPath: string, text: string) {
+  let lastError: unknown;
+  const candidates = getMuhammadTtsCandidates(text);
+  for (const candidate of candidates) {
+    try {
+      await FileSystem.downloadAsync(candidate.url, targetPath, candidate.headers ? { headers: candidate.headers } : undefined);
+      const info = await FileSystem.getInfoAsync(targetPath);
+      if (info.exists) return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error('No audio provider succeeded.');
+}
+
+async function fetchMuhammadNamesFromApi(): Promise<NameItem[]> {
+  const response = await fetch('https://www.quranhomeschool.com/blog/tag/asma-un-nabi/');
+  if (!response.ok) throw new Error('Failed to fetch Muhammad names source.');
+  const html = await response.text();
+
+  const start = html.indexOf('The List of 99 Titles and Names of Prophet Muhammad');
+  if (start < 0) throw new Error('Muhammad names table not found in source.');
+  const tableStart = html.indexOf('<table', start);
+  const tableEnd = html.indexOf('</table>', tableStart);
+  if (tableStart < 0 || tableEnd < 0) throw new Error('Muhammad names table unavailable.');
+
+  const tableHtml = html.slice(tableStart, tableEnd);
+  const rows = [...tableHtml.matchAll(/<tr[\s\S]*?<\/tr>/gi)];
+  const parsed: NameItem[] = [];
+
+  for (const rowMatch of rows) {
+    const cells = [...rowMatch[0].matchAll(/<td[\s\S]*?>([\s\S]*?)<\/td>/gi)].map((m) => decodeHtml(stripTags(m[1])));
+    if (cells.length < 4) continue;
+    const id = Number(cells[0].replace(/[^\d]/g, ''));
+    const arabic = cells[1];
+    const transliteration = cells[2];
+    const meaning = cells[3];
+    if (!Number.isFinite(id) || id < 1 || id > 99) continue;
+    if (!arabic || !transliteration) continue;
+    parsed.push({ id, arabic, transliteration, meaning });
+  }
+
+  const deduped = new Map<number, NameItem>();
+  for (const item of parsed) {
+    if (!deduped.has(item.id)) deduped.set(item.id, item);
+  }
+  const result = Array.from(deduped.values()).sort((a, b) => a.id - b.id).slice(0, 99);
+  if (result.length < 99) throw new Error('Muhammad names source returned incomplete data.');
+  return result;
+}
+
 async function getCachedNames(type: 'allah' | 'muhammad'): Promise<NameItem[] | null> {
   const key = type === 'allah' ? ALLAH_NAMES_CACHE_KEY : MUHAMMAD_NAMES_CACHE_KEY;
   const raw = await AsyncStorage.getItem(key);
@@ -85,7 +153,11 @@ async function getCachedNames(type: 'allah' | 'muhammad'): Promise<NameItem[] | 
   try {
     const parsed = JSON.parse(raw) as any[];
     if (!Array.isArray(parsed)) return null;
-    if (type === 'muhammad') return parsed as NameItem[];
+    if (type === 'muhammad') {
+      const names = parsed as NameItem[];
+      if (names.length !== 99) return null;
+      return names;
+    }
     return parsed
       .map((item) => ({
         id: item.number,
@@ -152,15 +224,14 @@ export default function NamesDetailScreen() {
           );
         } else {
           const cached = await getCachedNames('muhammad');
-          if (!mounted) return;
-          if (cached?.length) {
+          if (cached?.length && mounted) {
             setNames(cached);
-          } else {
-            const fallback = buildMuhammadFallback();
-            setNames(fallback);
-            await AsyncStorage.setItem(MUHAMMAD_NAMES_CACHE_KEY, JSON.stringify(fallback));
+            setIsLoading(false);
           }
+          const apiNames = await fetchMuhammadNamesFromApi();
           if (!mounted) return;
+          setNames(apiNames);
+          await AsyncStorage.setItem(MUHAMMAD_NAMES_CACHE_KEY, JSON.stringify(apiNames));
         }
       } catch (error: any) {
         if (!mounted) return;
@@ -201,9 +272,29 @@ export default function NamesDetailScreen() {
     }
 
     if (normalizedType === 'muhammad') {
-      setIsDownloaded(true);
-      await AsyncStorage.setItem(`${NAMES_DOWNLOAD_FLAG_PREFIX}${normalizedType}`, '1');
-      Alert.alert('Ready', 'Muhammad names are loaded. Audio source is not available from the current API.');
+      setDownloadingAll(true);
+      try {
+        await FileSystem.makeDirectoryAsync(MUHAMMAD_AUDIO_DIR, { intermediates: true });
+        const audioMap: Record<string, string> = {};
+        for (const item of names) {
+          const text = (item.arabic || '').trim();
+          if (!text) continue;
+          const localFile = `${MUHAMMAD_AUDIO_DIR}${item.id}.mp3`;
+          const info = await FileSystem.getInfoAsync(localFile);
+          if (!info.exists) {
+            await downloadWithFallback(localFile, text);
+          }
+          audioMap[`${item.id}`] = localFile;
+        }
+        await AsyncStorage.setItem(MUHAMMAD_AUDIO_MAP_KEY, JSON.stringify(audioMap));
+        setIsDownloaded(true);
+        await AsyncStorage.setItem(`${NAMES_DOWNLOAD_FLAG_PREFIX}${normalizedType}`, '1');
+        Alert.alert('Download complete', 'Each Muhammad name audio is downloaded.');
+      } catch (error: any) {
+        Alert.alert('Download failed', error?.message || 'Could not download Muhammad names audio.');
+      } finally {
+        setDownloadingAll(false);
+      }
       return;
     }
 
@@ -214,7 +305,6 @@ export default function NamesDetailScreen() {
 
     setDownloadingAll(true);
     try {
-      // Keep UX lightweight: we verify all audio URLs are reachable before allowing playback.
       await Promise.all(
         names
           .filter((item) => item.audioUrl)
@@ -241,15 +331,38 @@ export default function NamesDetailScreen() {
       return;
     }
 
-    if (!item.audioUrl) {
-      Alert.alert('Audio unavailable', 'Audio is not available for this name from current API data.');
-      return;
-    }
-
     try {
       if (audioBusy) return;
       setAudioBusy(true);
       setIsPlayingAll(false);
+
+      if (normalizedType === 'muhammad') {
+        const rawMap = await AsyncStorage.getItem(MUHAMMAD_AUDIO_MAP_KEY);
+        const map = rawMap ? (JSON.parse(rawMap) as Record<string, string>) : {};
+        const uri = map?.[`${item.id}`];
+        if (!uri) {
+          Alert.alert('Audio unavailable', 'Please download Muhammad names audio first.');
+          return;
+        }
+        const info = await FileSystem.getInfoAsync(uri);
+        if (!info.exists) {
+          Alert.alert('Audio missing', 'Please download again.');
+          return;
+        }
+        await playManagedAudio({ uri }, {
+          onDidFinish: () => {
+            setPlayingId((current) => (current === item.id ? null : current));
+          },
+        });
+        setPlayingId(item.id);
+        return;
+      }
+
+      if (!item.audioUrl) {
+        Alert.alert('Audio unavailable', 'Audio is not available for this name from current API data.');
+        setPlayingId(null);
+        return;
+      }
       await playManagedAudio(
         { uri: item.audioUrl },
         {
@@ -489,8 +602,9 @@ const styles = StyleSheet.create({
   },
   arabic: {
     color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 22,
+    fontFamily: 'KFGQPCNastaleeq',
+    textAlign: 'right',
   },
   transliteration: {
     marginTop: 2,

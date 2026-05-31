@@ -1,29 +1,23 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Font from 'expo-font';
 import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getOrDownloadQuran } from './quranService';
+import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
 const BOOT_PRELOAD_DONE_KEY = 'boot_preload_done_v1';
 const ADHAN_KEY = 'adhan_file_path_v1';
 const ADHAN_URL = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg';
 const ALLAH_NAMES_CACHE_KEY = 'names_allah_cache_v1';
-const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v1';
-
-const MUHAMMAD_STARTER = [
-  'Muhammad', 'Ahmad', 'Al-Mahi', 'Al-Hashir', 'Al-Aqib', 'Al-Mustafa', 'Al-Mujtaba', 'Rasulullah',
-  'Nabiyullah', 'Habibullah', 'Al-Amin', 'As-Sadiq', 'Taha', 'Yasin', 'Abul-Qasim'
-];
+const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v3';
 
 function buildMuhammadTextNames() {
-  return Array.from({ length: 99 }, (_, index) => {
-    const starter = MUHAMMAD_STARTER[index];
-    return {
-      id: index + 1,
-      arabic: starter ? `اسم ${index + 1}` : `اسم محمد ${index + 1}`,
-      transliteration: starter || `Muhammad Name ${index + 1}`,
-    };
-  });
+  return MUHAMMAD_99_NAMES.map((item, index) => ({
+    id: index + 1,
+    arabic: `\u0627\u0633\u0645 \u0645\u062d\u0645\u062f ${index + 1}`,
+    transliteration: item.transliteration,
+    meaning: item.meaning,
+  }));
 }
 
 async function ensureAdhanFile() {
@@ -107,3 +101,5 @@ export async function runBootPreloadOnce() {
 
   await AsyncStorage.setItem(BOOT_PRELOAD_DONE_KEY, '1');
 }
+
+
