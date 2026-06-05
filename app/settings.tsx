@@ -5,6 +5,8 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -96,11 +98,19 @@ export default function SettingsScreen() {
   });
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.screen}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentInsetAdjustmentBehavior="automatic"
+        automaticallyAdjustKeyboardInsets
+      >
       <View style={styles.card}>
         <View style={styles.cardTitleRow}>
           <Text style={styles.cardTitle}>Reading Preferences</Text>
@@ -230,13 +240,14 @@ export default function SettingsScreen() {
           <Text style={styles.infoText}>Login to access Update Password and Delete Account.</Text>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: 16, gap: 12, paddingBottom: 24 },
+  container: { padding: 16, gap: 12, paddingBottom: 24, flexGrow: 1 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
