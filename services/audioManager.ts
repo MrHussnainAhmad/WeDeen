@@ -39,6 +39,33 @@ export async function setActiveAudioVolume(volume: number) {
   await activeSound.setVolumeAsync(Math.max(0, Math.min(1, volume))).catch(() => undefined);
 }
 
+/**
+ * Pause the active sound without tearing it down, so it can be resumed from the
+ * same position. Returns true if there was something to pause.
+ */
+export async function pauseActiveAudio(): Promise<boolean> {
+  if (!activeSound) return false;
+  try {
+    await activeSound.pauseAsync();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Resume the active (paused) sound. Returns true if playback resumed. */
+export async function resumeActiveAudio(): Promise<boolean> {
+  if (!activeSound) return false;
+  try {
+    const status = await activeSound.getStatusAsync();
+    if (status.isLoaded && status.didJustFinish) return false;
+    await activeSound.playAsync();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function playManagedAudio(
   source: AVPlaybackSource,
   options?: { onDidFinish?: () => void; volume?: number }

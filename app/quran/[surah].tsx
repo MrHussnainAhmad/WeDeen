@@ -20,6 +20,8 @@ import {
   getLocalAudioPath,
   getOrDownloadQuran,
   playAudio,
+  pauseAudio,
+  resumeAudio,
   stopAudio
 } from '@/services/quranService';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
@@ -35,6 +37,7 @@ export default function SurahDetailScreen() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [activeAyah, setActiveAyah] = useState<number | null>(null);
+  const [playback, setPlayback] = useState<'idle' | 'playing' | 'paused'>('idle');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [selectedEdition, setSelectedEdition] = useState('ar.alafasy');
   const [showReciterDropdown, setShowReciterDropdown] = useState(false);
@@ -70,6 +73,13 @@ export default function SurahDetailScreen() {
     }, [])
   );
 
+  // Stop playback when leaving the surah so audio doesn't keep going on other screens.
+  useEffect(() => {
+    return () => {
+      stopAudio().catch(() => undefined);
+    };
+  }, []);
+
   const onDownloadAudio = async (edition: string) => {
     try {
       setDownloaded(false);
@@ -100,7 +110,10 @@ export default function SurahDetailScreen() {
     await cancelSurahAudioDownload();
   };
 
-  const onPlay = async () => {
+  // Start full-surah playback from the beginning (used by both a fresh Play and
+  // the Restart action while already playing).
+  const startFromBeginning = async () => {
+    setShowReciterDropdown(false);
     const localSelected = await getLocalAudioPathForReciter(surahNumber, selectedEdition);
     const selectedValid = localSelected ? await localFileExists(localSelected) : false;
     const fallback = await getLocalAudioPath(surahNumber);
@@ -111,7 +124,8 @@ export default function SurahDetailScreen() {
 
     if (local) {
       try {
-        await playAudio(local);
+        await playAudio(local, () => setPlayback('idle'));
+        setPlayback('playing');
         return;
       } catch {
         // fallback below
@@ -121,10 +135,45 @@ export default function SurahDetailScreen() {
     const ayahUris = await getAllLocalAyahAudioPathsForReciter(surahNumber, selectedEdition);
     if (!ayahUris.length) {
       setStatusMessage('Please download this surah audio first.');
+      setPlayback('idle');
       return;
     }
-    await playAudioSequence(ayahUris);
+    await playAudioSequence(ayahUris, () => setPlayback('idle'));
+    setPlayback('playing');
     setStatusMessage('Playing full surah using ayah-by-ayah audio.');
+  };
+
+  const onPlay = async () => {
+    // While playing, this button acts as "Restart" — begin again from the top.
+    if (playback === 'playing') {
+      await startFromBeginning();
+      return;
+    }
+    // If paused, resume from where it stopped.
+    if (playback === 'paused') {
+      const resumed = await resumeAudio();
+      if (resumed) {
+        setPlayback('playing');
+        return;
+      }
+      // Nothing to resume (sound was torn down) — fall through to a fresh start.
+    }
+    await startFromBeginning();
+  };
+
+  const onPause = async () => {
+    // Pause full-surah playback, keeping position so Play can resume.
+    if (playback === 'playing') {
+      const paused = await pauseAudio();
+      if (paused) {
+        setPlayback('paused');
+        return;
+      }
+    }
+    // Couldn't pause (e.g. ayah-by-ayah sequence) — stop cleanly instead.
+    await stopAudio();
+    setPlayback('idle');
+    setActiveAyah(null);
   };
 
   const onPlayAyah = async (ayahNumber: number) => {
@@ -145,11 +194,23 @@ export default function SurahDetailScreen() {
     }
 
     setStatusMessage('');
+    // A single-ayah tap takes over from any full-surah playback.
+    setPlayback('idle');
     setActiveAyah(ayahNumber);
-    await playAudio(localAyah);
+    // Reset the button when this ayah finishes on its own, so it doesn't stay
+    // stuck showing the pause icon.
+    await playAudio(localAyah, () =>
+      setActiveAyah((current) => (current === ayahNumber ? null : current))
+    );
   };
 
   const onSelectReciterForDownload = async (edition: string) => {
+    // Switching reciter discards any current/paused playback so the next Play
+    // starts fresh with the newly chosen reciter (never resumes the old audio).
+    await stopAudio();
+    setPlayback('idle');
+    setActiveAyah(null);
+
     const exists = await hasDownloadedSurahForReciter(surahNumber, edition);
     const localForReciter = await getLocalAudioPathForReciter(surahNumber, edition);
     const validFile = localForReciter ? await localFileExists(localForReciter) : false;
@@ -188,8 +249,12 @@ export default function SurahDetailScreen() {
         <View style={styles.buttonWrap}>
           <PressableScale
             onPress={() => setShowReciterDropdown((prev) => !prev)}
-            disabled={isDownloading || recitersQuery.isLoading}
-            style={[styles.button, styles.buttonPrimary, isDownloading && { opacity: 0.6 }]}
+            disabled={isDownloading || recitersQuery.isLoading || playback === 'playing'}
+            style={[
+              styles.button,
+              styles.buttonPrimary,
+              (isDownloading || playback === 'playing') && { opacity: 0.6 },
+            ]}
           >
             <MaterialCommunityIcons name="microphone-outline" size={18} color="#fff" />
             <Text style={styles.buttonText}>
@@ -199,12 +264,22 @@ export default function SurahDetailScreen() {
         </View>
         <View style={styles.buttonWrap}>
           <PressableScale onPress={onPlay} style={[styles.button, styles.buttonGold]}>
-            <Ionicons name="play" size={18} color={colors.primaryDeep} />
-            <Text style={[styles.buttonText, { color: colors.primaryDeep }]}>Play</Text>
+            <Ionicons name={playback === 'playing' ? 'refresh' : 'play'} size={18} color={colors.primaryDeep} />
+            <Text style={[styles.buttonText, { color: colors.primaryDeep }]}>
+              {playback === 'playing' ? 'Restart' : playback === 'paused' ? 'Resume' : 'Play'}
+            </Text>
           </PressableScale>
         </View>
         <View style={styles.buttonWrap}>
-          <PressableScale onPress={stopAudio} style={[styles.button, styles.buttonSecondary]}>
+          <PressableScale
+            onPress={onPause}
+            disabled={playback !== 'playing'}
+            style={[
+              styles.button,
+              styles.buttonSecondary,
+              playback !== 'playing' && { opacity: 0.6 },
+            ]}
+          >
             <Ionicons name="pause" size={18} color="#fff" />
             <Text style={styles.buttonText}>Pause</Text>
           </PressableScale>

@@ -53,10 +53,14 @@ export async function maybeRefreshLocation(): Promise<boolean> {
     const perm = await Location.getForegroundPermissionsAsync();
     if (!perm.granted) return false;
 
+    const saved = await getSavedLocation();
+    // Respect a manual pin: if the user locked the timings to a chosen city,
+    // never override it with GPS.
+    if (saved?.locked) return false;
+
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     const { latitude, longitude } = pos.coords;
 
-    const saved = await getSavedLocation();
     if (
       saved?.latitude != null &&
       saved?.longitude != null &&
@@ -81,7 +85,7 @@ export async function maybeRefreshLocation(): Promise<boolean> {
       country,
       latitude,
       longitude,
-      locked: saved?.locked ?? true,
+      locked: false,
     };
     await saveLocation(next);
     await schedulePrayerAdhan(next).catch(() => undefined);

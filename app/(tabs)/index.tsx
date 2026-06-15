@@ -49,7 +49,11 @@ export default function HomeScreen() {
 
   const greetingHour = useMemo(() => new Date(nowTick).getHours(), [Math.floor(nowTick / 60000)]);
 
-  if (isLoading) {
+  // Show the full skeleton during the initial content load, but stop blocking as
+  // soon as the (independent) prayer snapshot has resolved — so a slow content API
+  // never holds up the prayer hero. `locationReady` covers the brief window while
+  // the saved location is read from storage.
+  if (isLoading && (!prayer.locationReady || prayer.isLoading)) {
     return (
       <View style={styles.screen}>
         <HomeSkeleton topPad={topPad} />
@@ -70,7 +74,7 @@ export default function HomeScreen() {
       scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
-          refreshing={isFetching}
+          refreshing={isFetching || prayer.isFetching}
           onRefresh={onRefresh}
           colors={[colors.primary]}
           tintColor={colors.primary}

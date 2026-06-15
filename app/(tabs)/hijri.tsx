@@ -160,7 +160,7 @@ export default function TimingsScreen() {
             country,
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
-            locked: true
+            locked: false
           };
           await saveLocation(autoLoc);
           if (!mounted) return;
@@ -325,7 +325,7 @@ export default function TimingsScreen() {
       country,
       latitude: pos.coords.latitude,
       longitude: pos.coords.longitude,
-      locked: true
+      locked: false
     };
     await saveLocation(loc);
     setLocation(loc);
@@ -445,10 +445,20 @@ export default function TimingsScreen() {
           icon={<Ionicons name="location" size={18} color={colors.primary} />}
         />
         <Text style={styles.locationText}>
-          {locationLoading ? 'Detecting location...' : `${location?.city || 'Unknown'}, ${location?.country || ''}`}
+          {locationLoading
+            ? 'Detecting location...'
+            : location
+              ? `${location.city || 'Unknown'}, ${location.country || ''}`
+              : 'No location set'}
         </Text>
         <Text style={styles.locationSubText}>
-          {location?.locked ? 'Location is locked to your selection.' : 'Auto-location is active.'}
+          {locationLoading
+            ? 'Please wait…'
+            : !location
+              ? 'Enable location or enter a city to see prayer times.'
+              : location.locked
+                ? 'Locked to your chosen city.'
+                : 'Auto-updates to your current location.'}
         </Text>
 
         <PressableScale onPress={() => setShowLocationEditor((v) => !v)} style={styles.linkButton}>

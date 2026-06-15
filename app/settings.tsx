@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,23 @@ import {
 
 const MIN_AYAH_FONT = 18;
 const MAX_AYAH_FONT = 42;
+
+const APP_VERSION =
+  Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? '1.0.0';
+const ANDROID_PACKAGE =
+  (Constants.expoConfig as any)?.android?.package ?? 'com.hussnainahmadsahi.wedeen';
+const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+const PLAY_STORE_MARKET = `market://details?id=${ANDROID_PACKAGE}`;
+
+async function openStoreListing() {
+  // Prefer the native Play Store app, fall back to the web listing.
+  try {
+    const canOpenMarket = await Linking.canOpenURL(PLAY_STORE_MARKET);
+    await Linking.openURL(canOpenMarket ? PLAY_STORE_MARKET : PLAY_STORE_URL);
+  } catch {
+    Linking.openURL(PLAY_STORE_URL).catch(() => undefined);
+  }
+}
 const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
 
 export default function SettingsScreen() {
@@ -388,7 +406,7 @@ export default function SettingsScreen() {
 
         {token ? (
           <>
-            <OrnateCard index={3}>
+            <OrnateCard index={5}>
               <SectionHeader
                 title="Update Password"
                 icon={<Ionicons name="lock-closed-outline" size={18} color={colors.primary} />}
@@ -430,7 +448,7 @@ export default function SettingsScreen() {
               </PressableScale>
             </OrnateCard>
 
-            <FadeInView index={4}>
+            <FadeInView index={6}>
               <PressableScale
                 onPress={() =>
                   Alert.alert('Delete Account', 'This action is permanent. Continue?', [
@@ -457,7 +475,7 @@ export default function SettingsScreen() {
             </FadeInView>
           </>
         ) : (
-          <OrnateCard index={3}>
+          <OrnateCard index={5}>
             <SectionHeader
               title="Account Security"
               icon={<Ionicons name="shield-outline" size={18} color={colors.primary} />}
@@ -465,6 +483,25 @@ export default function SettingsScreen() {
             <Text style={styles.infoText}>Login to access Update Password and Delete Account.</Text>
           </OrnateCard>
         )}
+
+        <OrnateCard index={7}>
+          <SectionHeader
+            title="About"
+            icon={<Ionicons name="information-circle-outline" size={18} color={colors.primary} />}
+          />
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Version</Text>
+            <Text style={styles.aboutValue}>{APP_VERSION}</Text>
+          </View>
+          <View style={[styles.aboutRow, styles.aboutRowLast]}>
+            <Text style={styles.aboutLabel}>Developer</Text>
+            <Text style={styles.aboutValue}>Apps by Hussnain</Text>
+          </View>
+          <PressableScale onPress={openStoreListing} style={styles.rateButton}>
+            <Ionicons name="star" size={16} color={colors.goldDeep} style={{ marginRight: 8 }} />
+            <Text style={styles.rateButtonText}>Rate on Play Store</Text>
+          </PressableScale>
+        </OrnateCard>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -575,4 +612,27 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.7 },
   infoText: { color: colors.muted, fontWeight: '600', fontSize: 13, lineHeight: 19 },
+  aboutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSoft,
+  },
+  aboutRowLast: { borderBottomWidth: 0 },
+  aboutLabel: { color: colors.muted, fontSize: 13.5, fontWeight: '600' },
+  aboutValue: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  rateButton: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    borderRadius: radius.sm,
+    paddingVertical: 12,
+  },
+  rateButtonText: { color: colors.goldDeep, fontWeight: '800', fontSize: 14 },
 });

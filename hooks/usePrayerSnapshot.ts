@@ -141,7 +141,7 @@ export function usePrayerSnapshot(nowTick: number) {
         country: geo?.[0]?.country || 'Unknown Country',
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
-        locked: true,
+        locked: false,
       };
       await saveLocation(loc);
       setLocation(loc);

@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ummahApi } from './http';
-import { playManagedAudio, stopAllAudio } from './audioManager';
+import {
+  pauseActiveAudio,
+  playManagedAudio,
+  resumeActiveAudio,
+  stopAllAudio,
+} from './audioManager';
 
 const QURAN_KEY = 'quran_uthmani_full_v1';
 const QURAN_FILE_DIR = `${FileSystem.documentDirectory}quran/`;
@@ -334,12 +339,12 @@ export async function getActiveReciterForSurah(surahNumber: number) {
   return map?.[`${surahNumber}`] ?? null;
 }
 
-export async function playAudio(uri: string) {
+export async function playAudio(uri: string, onDidFinish?: () => void) {
   sequenceToken += 1;
-  return playManagedAudio({ uri });
+  return playManagedAudio({ uri }, onDidFinish ? { onDidFinish } : undefined);
 }
 
-export async function playAudioSequence(uris: string[]) {
+export async function playAudioSequence(uris: string[], onComplete?: () => void) {
   sequenceToken += 1;
   const currentToken = sequenceToken;
   const validUris = uris.filter(Boolean);
@@ -351,7 +356,11 @@ export async function playAudioSequence(uris: string[]) {
 
   const playAt = async (index: number): Promise<void> => {
     if (currentToken !== sequenceToken) return;
-    if (index >= validUris.length) return;
+    if (index >= validUris.length) {
+      // Reached the end naturally (not interrupted by a newer playback).
+      if (currentToken === sequenceToken) onComplete?.();
+      return;
+    }
     await playManagedAudio(
       { uri: validUris[index] },
       { onDidFinish: () => void playAt(index + 1).catch(() => undefined) }
@@ -378,4 +387,14 @@ export async function getAllLocalAyahAudioPathsForReciter(surahNumber: number, e
 export async function stopAudio() {
   sequenceToken += 1;
   await stopAllAudio();
+}
+
+/** Pause current playback without losing position (resume with resumeAudio). */
+export async function pauseAudio() {
+  return pauseActiveAudio();
+}
+
+/** Resume playback paused with pauseAudio. */
+export async function resumeAudio() {
+  return resumeActiveAudio();
 }
