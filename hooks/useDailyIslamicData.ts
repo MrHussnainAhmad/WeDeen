@@ -56,7 +56,7 @@ export function useDailyIslamicData() {
   const localDateKey = getLocalDateKey(new Date());
 
   return useQuery({
-    queryKey: ['daily-islamic-data-v5', localDateKey],
+    queryKey: ['daily-islamic-data-v6', localDateKey],
     queryFn: async () => {
       const now = new Date();
       const today = formatTodayForAladhan(now);
@@ -68,19 +68,33 @@ export function useDailyIslamicData() {
 
       const [hijriRes, reminderRes, hadithRes] = await Promise.allSettled([
         axios.get(`https://api.aladhan.com/v1/gToH?date=${today}`, { timeout: 12000 }),
-        ummahApi.get(`/ayah/${ayahIndex}/en.asad`),
+        // Fetch the original Arabic (Uthmani) alongside the English translation in one call.
+        ummahApi.get(`/ayah/${ayahIndex}/editions/quran-uthmani,en.asad`),
         axios.get(`https://api.hadith.gading.dev/books/muslim/${hadithIndex}`, { timeout: 12000 })
       ]);
 
-      const hijriDate =
-        hijriRes.status === 'fulfilled'
-          ? `${hijriRes.value.data?.data?.hijri?.day ?? ''} ${hijriRes.value.data?.data?.hijri?.month?.en ?? ''} ${hijriRes.value.data?.data?.hijri?.year ?? ''} AH`.trim()
-          : 'Hijri date unavailable';
+      const hijri = hijriRes.status === 'fulfilled' ? hijriRes.value.data?.data?.hijri : null;
+      const hijriDate = hijri
+        ? `${hijri.day ?? ''} ${hijri.month?.en ?? ''} ${hijri.year ?? ''} AH`.trim()
+        : 'Hijri date unavailable';
+      const hijriDay = hijri?.day ?? null;
+      const hijriMonth = hijri?.month?.en ?? null;
+      const hijriYear = hijri?.year ?? null;
+      const hijriWeekday = hijri?.weekday?.en ?? null;
 
-      const reminder =
-        reminderRes.status === 'fulfilled'
-          ? reminderRes.value.data?.data?.text ?? 'Reminder unavailable'
-          : 'Reminder unavailable';
+      // The editions endpoint returns an array: [arabic edition, english edition].
+      const editions = reminderRes.status === 'fulfilled' ? reminderRes.value.data?.data : null;
+      const arabicEdition = Array.isArray(editions) ? editions[0] : null;
+      const englishEdition = Array.isArray(editions) ? editions[1] : editions;
+
+      const reminder = englishEdition?.text ?? 'Reminder unavailable';
+      const reminderArabic = arabicEdition?.text ?? null;
+      const surahEnglish = englishEdition?.surah?.englishName ?? arabicEdition?.surah?.englishName ?? null;
+      const surahArabic = englishEdition?.surah?.name ?? arabicEdition?.surah?.name ?? null;
+      const surahNumber = englishEdition?.surah?.number ?? arabicEdition?.surah?.number ?? null;
+      const ayahNumberInSurah = englishEdition?.numberInSurah ?? arabicEdition?.numberInSurah ?? null;
+      const verseReference =
+        surahEnglish && ayahNumberInSurah ? `${surahEnglish} · ${surahNumber}:${ayahNumberInSurah}` : null;
 
       const hadith =
         hadithRes.status === 'fulfilled'
@@ -94,7 +108,17 @@ export function useDailyIslamicData() {
 
       return {
         hijriDate,
+        hijriDay,
+        hijriMonth,
+        hijriYear,
+        hijriWeekday,
         reminder,
+        reminderArabic,
+        verseReference,
+        surahArabic,
+        surahEnglish,
+        surahNumber,
+        ayahNumberInSurah,
         hadith,
         azkar
       };

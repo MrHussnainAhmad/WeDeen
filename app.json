@@ -37,8 +37,17 @@
         "expo-notifications",
         {
           "sounds": [
-            "./assets/audio/adhan_alert.m4a"
+            "./assets/audio/adhan.m4a"
           ]
+        }
+      ],
+      "expo-background-task",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Allow WeDeen to use your location to keep prayer times and the adhan accurate while you travel.",
+          "locationWhenInUsePermission": "Allow WeDeen to use your location to calculate accurate prayer times for your area."
         }
       ]
     ],
@@ -54,4 +63,3 @@
     "owner": "hussnainahmadsahi"
   }
 }
-

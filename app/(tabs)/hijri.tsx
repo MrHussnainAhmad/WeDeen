@@ -1,16 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
-import * as FileSystem from 'expo-file-system/legacy';
+import { Link, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/theme/colors';
+import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
+import { FadeInView, PressableScale } from '@/components/Anim';
+import { OrnateCard, SectionHeader } from '@/components/ui';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
-import { playManagedAudio } from '@/services/audioManager';
-import { schedulePrayerNotificationsForToday } from '@/services/prayerNotificationService';
+import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
 
 type SavedLocation = {
   mode: 'coords' | 'city';
@@ -22,14 +23,7 @@ type SavedLocation = {
 };
 
 const LOCATION_KEY = 'timings_location_v1';
-const ADHAN_KEY = 'adhan_file_path_v1';
-const PLAYED_KEY = 'played_prayer_mark_v1';
-const ADHAN_URL = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg';
 const TIMINGS_CACHE_PREFIX = 'timings_cache_v1_';
-
-const PRAYER_KEYS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-const KAABA_LAT = 21.4225;
-const KAABA_LON = 39.8262;
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
@@ -37,6 +31,10 @@ function pad(n: number) {
 
 function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function todayApiDate(d = new Date()) {
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
 }
 
 function normalizeTime(raw: string) {
@@ -48,26 +46,6 @@ function parsePrayerDate(timeHHmm: string, day = new Date()) {
   const d = new Date(day);
   d.setHours(Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0, 0, 0);
   return d;
-}
-
-function toRadians(deg: number) {
-  return (deg * Math.PI) / 180;
-}
-
-function toDegrees(rad: number) {
-  return (rad * 180) / Math.PI;
-}
-
-function calculateQiblaBearing(lat: number, lon: number) {
-  const lat1 = toRadians(lat);
-  const lon1 = toRadians(lon);
-  const lat2 = toRadians(KAABA_LAT);
-  const lon2 = toRadians(KAABA_LON);
-  const dLon = lon2 - lon1;
-  const y = Math.sin(dLon);
-  const x = Math.cos(lat1) * Math.tan(lat2) - Math.sin(lat1) * Math.cos(dLon);
-  const brng = toDegrees(Math.atan2(y, x));
-  return (brng + 360) % 360;
 }
 
 function getCountdownText(target: Date, now = new Date()) {
@@ -92,6 +70,14 @@ function formatTimeDisplay(value: string, use24HourTime: boolean) {
   return `${converted}:${String(mins).padStart(2, '0')} ${period}`;
 }
 
+function formatGregorianLabel(gregorian?: any) {
+  if (!gregorian) return '';
+  const day = gregorian.day ?? '';
+  const month = gregorian.month?.en ?? '';
+  const year = gregorian.year ?? '';
+  return `${day} ${month} ${year}`.trim();
+}
+
 async function getSavedLocation() {
   const raw = await AsyncStorage.getItem(LOCATION_KEY);
   if (!raw) return null;
@@ -113,29 +99,6 @@ function getLocationCacheKey(loc: SavedLocation) {
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
 }
 
-async function ensureAdhanFile() {
-  const existing = await AsyncStorage.getItem(ADHAN_KEY);
-  if (existing) {
-    const info = await FileSystem.getInfoAsync(existing);
-    if (info.exists) return existing;
-  }
-
-  const dir = `${FileSystem.documentDirectory}audio/`;
-  await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  const target = `${dir}adhan.ogg`;
-  const info = await FileSystem.getInfoAsync(target);
-  if (!info.exists) {
-    await FileSystem.downloadAsync(ADHAN_URL, target);
-  }
-  await AsyncStorage.setItem(ADHAN_KEY, target);
-  return target;
-}
-
-async function playAdhan() {
-  const uri = await ensureAdhanFile();
-  await playManagedAudio({ uri });
-}
-
 export default function TimingsScreen() {
   const insets = useSafeAreaInsets();
   const [locationLoading, setLocationLoading] = useState(true);
@@ -145,15 +108,11 @@ export default function TimingsScreen() {
   const [showLocationEditor, setShowLocationEditor] = useState(false);
   const [todayDateKey, setTodayDateKey] = useState(todayKey());
   const [use24HourTime, setUse24HourTime] = useState(uiPreferenceDefaults.use24HourTime);
-  const [showQibla, setShowQibla] = useState(false);
-  const [heading, setHeading] = useState<number | null>(null);
-  const [qiblaCoords, setQiblaCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
 
-  const now = new Date();
-  const [calendarMonth, setCalendarMonth] = useState(now.getMonth() + 1);
-  const [calendarYear, setCalendarYear] = useState(now.getFullYear());
-  const timerRef = useRef<any>(null);
+  const [calendarMonth, setCalendarMonth] = useState(1);
+  const [calendarYear, setCalendarYear] = useState(1447);
+  const [calendarInitialized, setCalendarInitialized] = useState(false);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -163,44 +122,6 @@ export default function TimingsScreen() {
     }, 60 * 1000);
     return () => clearInterval(tick);
   }, []);
-
-  useEffect(() => {
-    if (!showQibla) return;
-    let sub: { remove: () => void } | null = null;
-    Location.watchHeadingAsync((h) => {
-      const value = typeof h.trueHeading === 'number' && h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-      setHeading(value);
-    })
-      .then((s) => {
-        sub = s;
-      })
-      .catch(() => undefined);
-    return () => {
-      if (sub) sub.remove();
-    };
-  }, [showQibla]);
-
-  useEffect(() => {
-    let mounted = true;
-    const resolveCoords = async () => {
-      if (!location) return;
-      if (location.mode === 'coords' && location.latitude && location.longitude) {
-        if (mounted) setQiblaCoords({ lat: location.latitude, lon: location.longitude });
-        return;
-      }
-      try {
-        const results = await Location.geocodeAsync(`${location.city}, ${location.country}`);
-        if (!results?.length) return;
-        if (mounted) setQiblaCoords({ lat: results[0].latitude, lon: results[0].longitude });
-      } catch {
-        // ignore
-      }
-    };
-    resolveCoords();
-    return () => {
-      mounted = false;
-    };
-  }, [location?.city, location?.country, location?.mode, location?.latitude, location?.longitude]);
 
   useFocusEffect(
     useCallback(() => {
@@ -215,12 +136,6 @@ export default function TimingsScreen() {
     let mounted = true;
 
     const bootstrap = async () => {
-      try {
-        await ensureAdhanFile();
-      } catch {
-        // non-fatal
-      }
-
       const saved = await getSavedLocation();
       if (saved) {
         if (!mounted) return;
@@ -274,7 +189,7 @@ export default function TimingsScreen() {
     refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       if (!location) return null;
-      const date = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
+      const date = todayApiDate();
       const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`;
       let url = '';
 
@@ -294,7 +209,12 @@ export default function TimingsScreen() {
           maghrib: normalizeTime(timings.Maghrib),
           isha: normalizeTime(timings.Isha),
           hijriReadable:
-            `${json?.data?.date?.hijri?.day ?? ''} ${json?.data?.date?.hijri?.month?.en ?? ''} ${json?.data?.date?.hijri?.year ?? ''} AH`.trim()
+            `${json?.data?.date?.hijri?.day ?? ''} ${json?.data?.date?.hijri?.month?.en ?? ''} ${json?.data?.date?.hijri?.year ?? ''} AH`.trim(),
+          gregorianReadable: formatGregorianLabel(json?.data?.date?.gregorian),
+          hijriDay: json?.data?.date?.hijri?.day ?? null,
+          hijriMonthName: json?.data?.date?.hijri?.month?.en ?? null,
+          hijriMonthNumber: Number(json?.data?.date?.hijri?.month?.number),
+          hijriYear: Number(json?.data?.date?.hijri?.year),
         };
         await AsyncStorage.setItem(cacheKey, JSON.stringify(payload));
         return payload;
@@ -312,68 +232,57 @@ export default function TimingsScreen() {
     }
   });
 
+  const todayHijriQuery = useQuery({
+    queryKey: ['today-hijri-date', todayDateKey],
+    queryFn: async () => {
+      const res = await fetch(`https://api.aladhan.com/v1/gToH?date=${todayApiDate()}`);
+      const json = await res.json();
+      return json?.data ?? null;
+    }
+  });
+
+  useEffect(() => {
+    if (calendarInitialized) return;
+    const hijri = timingsQuery.data?.hijriMonthNumber
+      ? {
+          month: timingsQuery.data.hijriMonthNumber,
+          year: timingsQuery.data.hijriYear,
+        }
+      : todayHijriQuery.data?.hijri
+        ? {
+            month: Number(todayHijriQuery.data.hijri?.month?.number),
+            year: Number(todayHijriQuery.data.hijri?.year),
+          }
+        : null;
+
+    if (!hijri || !Number.isFinite(hijri.month) || !Number.isFinite(hijri.year)) return;
+    setCalendarMonth(hijri.month);
+    setCalendarYear(hijri.year);
+    setCalendarInitialized(true);
+  }, [
+    calendarInitialized,
+    timingsQuery.data?.hijriMonthNumber,
+    timingsQuery.data?.hijriYear,
+    todayHijriQuery.data,
+  ]);
+
   const monthCalendarQuery = useQuery({
     queryKey: ['hijri-calendar', calendarMonth, calendarYear],
+    enabled: calendarInitialized,
     queryFn: async () => {
-      const res = await fetch(`https://api.aladhan.com/v1/gToHCalendar/${calendarMonth}/${calendarYear}`);
+      const res = await fetch(`https://api.aladhan.com/v1/hToGCalendar/${calendarMonth}/${calendarYear}`);
       const json = await res.json();
       return json?.data ?? [];
     }
   });
 
+  // Arm the 7-day adhan notifications whenever the location changes. The adhan
+  // itself (full audio in foreground, short clip in background) is driven by the
+  // notification handler in _layout, so no foreground polling is needed here.
   useEffect(() => {
-    if (!timingsQuery.data) return;
-    const timings = timingsQuery.data;
-
-    const runCheck = async () => {
-      const nowDate = new Date();
-      const dateK = todayKey(nowDate);
-      const raw = await AsyncStorage.getItem(PLAYED_KEY);
-      const playedMap = raw ? JSON.parse(raw) : {};
-      playedMap[dateK] = playedMap[dateK] || {};
-
-      const prayerMap: Record<string, string> = {
-        Fajr: timings.fajr,
-        Dhuhr: timings.dhuhr,
-        Asr: timings.asr,
-        Maghrib: timings.maghrib,
-        Isha: timings.isha
-      };
-
-      for (const prayer of PRAYER_KEYS) {
-        const t = prayerMap[prayer];
-        if (!t) continue;
-        const target = parsePrayerDate(t, nowDate);
-        const diff = Math.abs(nowDate.getTime() - target.getTime());
-        if (diff <= 20_000 && !playedMap[dateK][prayer]) {
-          playedMap[dateK][prayer] = true;
-          await AsyncStorage.setItem(PLAYED_KEY, JSON.stringify(playedMap));
-          await playAdhan();
-        }
-      }
-    };
-
-    runCheck().catch(() => undefined);
-    timerRef.current = setInterval(() => {
-      runCheck().catch(() => undefined);
-    }, 10_000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [timingsQuery.data]);
-
-  useEffect(() => {
-    if (!timingsQuery.data || !location) return;
-    const data = timingsQuery.data;
-    schedulePrayerNotificationsForToday([
-      { label: 'Fajr', time: data.fajr },
-      { label: 'Dhuhr', time: data.dhuhr },
-      { label: 'Asr', time: data.asr },
-      { label: 'Maghrib', time: data.maghrib },
-      { label: 'Isha', time: data.isha },
-    ]).catch(() => undefined);
-  }, [timingsQuery.data, location?.city, location?.country, location?.latitude, location?.longitude, location?.mode]);
+    if (!location) return;
+    schedulePrayerAdhan(location).catch(() => undefined);
+  }, [location?.city, location?.country, location?.latitude, location?.longitude, location?.mode]);
 
   const hijriCells = useMemo(() => {
     const rows = monthCalendarQuery.data || [];
@@ -454,88 +363,98 @@ export default function TimingsScreen() {
     return { ...entries[0], countdown: getCountdownText(tomorrowFajr, nowDate) };
   }, [timingsQuery.data, nowTick]);
 
-  const todayGregorianDay = String(new Date().getDate());
-  const qiblaBearing = qiblaCoords ? calculateQiblaBearing(qiblaCoords.lat, qiblaCoords.lon) : null;
-  const qiblaNeedleRotation = qiblaBearing !== null && heading !== null ? qiblaBearing - heading : 0;
-  const qiblaDelta =
-    qiblaBearing !== null && heading !== null ? ((qiblaBearing - heading + 540) % 360) - 180 : null;
+  const todayGregorianDate = todayApiDate();
+  const currentHijri = timingsQuery.data?.hijriReadable ?? (
+    todayHijriQuery.data?.hijri
+      ? `${todayHijriQuery.data.hijri.day ?? ''} ${todayHijriQuery.data.hijri.month?.en ?? ''} ${todayHijriQuery.data.hijri.year ?? ''} AH`.trim()
+      : 'Hijri date'
+  );
+  const currentGregorian = timingsQuery.data?.gregorianReadable ?? formatGregorianLabel(todayHijriQuery.data?.gregorian);
+  const calendarRows = monthCalendarQuery.data || [];
+  const calendarMonthName =
+    calendarRows.find((row: any) => row?.hijri?.month?.en)?.hijri?.month?.en ??
+    timingsQuery.data?.hijriMonthName ??
+    todayHijriQuery.data?.hijri?.month?.en ??
+    'Islamic Month';
+  const calendarGregorianSpan = calendarRows.length
+    ? `${formatGregorianLabel(calendarRows[0]?.gregorian)} - ${formatGregorianLabel(calendarRows[calendarRows.length - 1]?.gregorian)}`
+    : 'Loading Gregorian range';
 
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 18, 24) }]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.heroCard}>
-        <View style={styles.heroDecorOne} />
-        <View style={styles.heroDecorTwo} />
-        <View style={styles.heroTopRow}>
-          <View style={styles.heroIcon}>
-            <MaterialCommunityIcons name="clock-outline" size={22} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>Prayer Timings</Text>
-            <Text style={styles.heroStatus}>
-              {timingsQuery.isFetching ? 'Updating timings...' : `Hijri: ${timingsQuery.data?.hijriReadable || '--'}`}
-            </Text>
-            <Pressable onPress={() => setShowQibla((v) => !v)} style={styles.qiblaLinkButton}>
-              <Text style={styles.qiblaLinkText}>{showQibla ? 'Hide Qibla' : 'See Qibla'}</Text>
-            </Pressable>
-          </View>
-        </View>
-        {showQibla ? (
-          <View style={styles.qiblaCard}>
-            <Text style={styles.qiblaTitle}>Qibla Compass</Text>
-            <Text style={styles.qiblaSubText}>
-              {qiblaBearing === null ? 'Qibla needs a valid location.' : `Qibla: ${Math.round(qiblaBearing)}°`}
-            </Text>
-            <Text style={styles.qiblaSubText}>
-              {heading === null ? 'Calibrating compass...' : `Heading: ${Math.round(heading)}°`}
-            </Text>
-            <View style={styles.qiblaDial}>
-              <Text style={styles.qiblaNorth}>N</Text>
-              <View style={styles.qiblaBaseNeedle} />
-              <View style={[styles.qiblaNeedle, { transform: [{ rotate: `${qiblaNeedleRotation}deg` }] }]} />
+      {/* ───── Next Prayer Hero ───── */}
+      <FadeInView index={0}>
+        <View style={styles.hero}>
+          <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
+          <View style={styles.heroGoldTop} />
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIcon}>
+              <MaterialCommunityIcons name="mosque" size={22} color={colors.gold} />
             </View>
-            <Text style={styles.qiblaHint}>
-              {qiblaDelta === null
-                ? 'Move phone in 8-shape for compass lock.'
-                : Math.abs(qiblaDelta) <= 5
-                  ? 'Facing Qibla'
-                  : qiblaDelta > 0
-                    ? `Turn right ${Math.round(Math.abs(qiblaDelta))}°`
-                    : `Turn left ${Math.round(Math.abs(qiblaDelta))}°`}
-            </Text>
-          </View>
-        ) : null}
-        {nextPrayer ? (
-          <View style={styles.nextPrayerPill}>
-            <View>
-              <Text style={styles.nextPrayerLabel}>Next Prayer</Text>
-              <Text style={styles.nextPrayerName}>
-                {nextPrayer.label} | {formatTimeDisplay(nextPrayer.value, use24HourTime)}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>Prayer Timings</Text>
+              <Text style={styles.heroStatus}>
+                {timingsQuery.isFetching ? 'Updating timings...' : currentHijri}
               </Text>
             </View>
-            <Text style={styles.nextPrayerCountdown}>{nextPrayer.countdown}</Text>
+            <Link href="/qibla" asChild>
+              <PressableScale style={styles.qiblaLinkButton}>
+                <MaterialCommunityIcons name="compass-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={styles.qiblaLinkText}>Qibla</Text>
+              </PressableScale>
+            </Link>
           </View>
-        ) : null}
-      </View>
 
-      <View style={styles.card}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="location-outline" size={18} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Location</Text>
+          {nextPrayer ? (
+            <View style={styles.nextPrayerPill}>
+              <View style={styles.nextPrayerGlow} />
+              <View>
+                <Text style={styles.nextPrayerLabel}>NEXT PRAYER</Text>
+                <Text style={styles.nextPrayerName}>
+                  {nextPrayer.label} - {formatTimeDisplay(nextPrayer.value, use24HourTime)}
+                </Text>
+              </View>
+              <View style={styles.countdownBadge}>
+                <Text style={styles.countdownText}>{nextPrayer.countdown}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.dateChips}>
+            <View style={styles.dateChip}>
+              <Text style={styles.dateChipLabel}>ISLAMIC DATE</Text>
+              <Text style={styles.dateChipValue} numberOfLines={1}>{currentHijri}</Text>
+            </View>
+            <View style={styles.dateChip}>
+              <Text style={styles.dateChipLabel}>EARTH CALENDAR</Text>
+              <Text style={styles.dateChipValue} numberOfLines={1}>{currentGregorian || todayDateKey}</Text>
+            </View>
+          </View>
+
         </View>
+      </FadeInView>
+
+      {/* ───── Location ───── */}
+      <OrnateCard index={1}>
+        <SectionHeader
+          title="Location"
+          icon={<Ionicons name="location" size={18} color={colors.primary} />}
+        />
         <Text style={styles.locationText}>
-          {locationLoading ? 'Detecting location...' : `Location: ${location?.city || 'Unknown'}, ${location?.country || ''}`}
+          {locationLoading ? 'Detecting location...' : `${location?.city || 'Unknown'}, ${location?.country || ''}`}
         </Text>
         <Text style={styles.locationSubText}>
           {location?.locked ? 'Location is locked to your selection.' : 'Auto-location is active.'}
         </Text>
 
-        <Pressable onPress={() => setShowLocationEditor((v) => !v)} style={styles.linkButton}>
-          <Text style={styles.linkButtonText}>{showLocationEditor ? 'Hide Location Options' : 'Change Location'}</Text>
-        </Pressable>
+        <PressableScale onPress={() => setShowLocationEditor((v) => !v)} style={styles.linkButton}>
+          <Ionicons name="create-outline" size={14} color={colors.primary} style={{ marginRight: 5 }} />
+          <Text style={styles.linkButtonText}>{showLocationEditor ? 'Hide Options' : 'Change Location'}</Text>
+        </PressableScale>
 
         {showLocationEditor ? (
           <View style={styles.editorWrap}>
@@ -543,92 +462,108 @@ export default function TimingsScreen() {
               value={manualCity}
               onChangeText={setManualCity}
               placeholder="City (e.g., Dunyapur)"
-              placeholderTextColor="#8C9A94"
+              placeholderTextColor={colors.faint}
               style={styles.input}
             />
             <TextInput
               value={manualCountry}
               onChangeText={setManualCountry}
               placeholder="Country (e.g., Pakistan)"
-              placeholderTextColor="#8C9A94"
+              placeholderTextColor={colors.faint}
               style={styles.input}
             />
             <View style={styles.editorActions}>
-              <Pressable onPress={saveManualLocation} style={[styles.actionButton, styles.primaryButton]}>
+              <PressableScale onPress={saveManualLocation} style={[styles.actionButton, styles.primaryButton]}>
                 <Text style={styles.actionButtonText}>Save Manual</Text>
-              </Pressable>
-              <Pressable onPress={useCurrentLocationAndLock} style={[styles.actionButton, styles.secondaryButton]}>
+              </PressableScale>
+              <PressableScale onPress={useCurrentLocationAndLock} style={[styles.actionButton, styles.secondaryButton]}>
                 <Text style={styles.actionButtonText}>Use Current</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           </View>
         ) : null}
-      </View>
+      </OrnateCard>
 
-      <View style={styles.card}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="time-outline" size={18} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Prayer Times</Text>
-        </View>
+      {/* ───── Prayer Times ───── */}
+      <OrnateCard index={2}>
+        <SectionHeader
+          title="Prayer Times"
+          subtitle="Today's schedule"
+          icon={<Ionicons name="time" size={18} color={colors.primary} />}
+        />
         <View style={styles.prayerList}>
-          {prayerRows.map((p) => (
-            <View
-              key={p.label}
-              style={[
-                styles.prayerRow,
-                nextPrayer?.label === p.label && styles.prayerRowActive,
-              ]}
-            >
-              <Text style={styles.prayerLabel}>{p.label}</Text>
-              <Text
-                style={[
-                  styles.prayerValue,
-                  nextPrayer?.label === p.label && styles.prayerValueActive,
-                ]}
-              >
-                {p.value}
-              </Text>
-            </View>
-          ))}
+          {prayerRows.map((p) => {
+            const active = nextPrayer?.label === p.label;
+            return (
+              <View key={p.label} style={[styles.prayerRow, active && styles.prayerRowActive]}>
+                <View style={styles.prayerLeft}>
+                  <EightPointStar size={14} color={active ? colors.gold : colors.primaryTint} filled={active} />
+                  <Text style={[styles.prayerLabel, active && styles.prayerLabelActive]}>{p.label}</Text>
+                </View>
+                <Text style={[styles.prayerValue, active && styles.prayerValueActive]}>{p.value}</Text>
+              </View>
+            );
+          })}
         </View>
-        <Text style={styles.adhanNote}>
-          Adhan plays at exact prayer minute while app is running. Adhan audio is downloaded and saved on first launch.
-        </Text>
-      </View>
+        <View style={styles.adhanNoteWrap}>
+          <Ionicons name="volume-medium-outline" size={14} color={colors.muted} style={{ marginRight: 6, marginTop: 1 }} />
+          <Text style={styles.adhanNote}>
+            Adhan plays at the exact prayer minute while the app is running. Audio is saved on first launch.
+          </Text>
+        </View>
+      </OrnateCard>
 
-      <View style={styles.card}>
-        <View style={styles.sectionHeader}>
-          <MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Hijri Calendar</Text>
-        </View>
-        <View style={styles.calendarTopRow}>
-          <Pressable
-            onPress={() => {
-              if (calendarMonth === 1) {
-                setCalendarMonth(12);
-                setCalendarYear((y) => y - 1);
-              } else {
-                setCalendarMonth((m) => m - 1);
-              }
-            }}
-            style={styles.calendarNavButton}
-          >
-            <Text style={styles.calendarNavText}>Prev</Text>
-          </Pressable>
-          <Text style={styles.calendarMonthText}>{pad(calendarMonth)}/{calendarYear}</Text>
-          <Pressable
-            onPress={() => {
-              if (calendarMonth === 12) {
-                setCalendarMonth(1);
-                setCalendarYear((y) => y + 1);
-              } else {
-                setCalendarMonth((m) => m + 1);
-              }
-            }}
-            style={styles.calendarNavButton}
-          >
-            <Text style={styles.calendarNavText}>Next</Text>
-          </Pressable>
+      {/* ───── Hijri Calendar ───── */}
+      <OrnateCard index={3}>
+        <SectionHeader
+          title="Hijri Calendar"
+          icon={<MaterialCommunityIcons name="calendar-month" size={18} color={colors.primary} />}
+        />
+        <View style={styles.calendarHeaderBand}>
+          <StarFieldWatermark rows={2} cols={5} starSize={14} color="rgba(11,107,79,0.055)" />
+          <View style={styles.calendarTopRow}>
+            <PressableScale
+              onPress={() => {
+                if (calendarMonth === 1) {
+                  setCalendarMonth(12);
+                  setCalendarYear((y) => y - 1);
+                } else {
+                  setCalendarMonth((m) => m - 1);
+                }
+              }}
+              style={styles.calendarNavButton}
+            >
+              <Ionicons name="chevron-back" size={16} color={colors.primary} />
+            </PressableScale>
+            <View style={styles.calendarTitleWrap}>
+              <Text style={styles.calendarEyebrow}>ISLAMIC MONTH</Text>
+              <Text style={styles.calendarMonthText}>{calendarMonthName}</Text>
+              <Text style={styles.calendarYearText}>{calendarYear} AH</Text>
+            </View>
+            <PressableScale
+              onPress={() => {
+                if (calendarMonth === 12) {
+                  setCalendarMonth(1);
+                  setCalendarYear((y) => y + 1);
+                } else {
+                  setCalendarMonth((m) => m + 1);
+                }
+              }}
+              style={styles.calendarNavButton}
+            >
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </PressableScale>
+          </View>
+          <View style={styles.calendarMetaRow}>
+            <View style={styles.calendarMetaPill}>
+              <MaterialCommunityIcons name="star-crescent" size={13} color={colors.goldDeep} />
+              <Text style={styles.calendarMetaText} numberOfLines={1}>{currentHijri}</Text>
+            </View>
+            <View style={styles.calendarMetaPill}>
+              <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+              <Text style={styles.calendarMetaText} numberOfLines={1}>{calendarGregorianSpan}</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.calendarWeekdays}>
@@ -638,51 +573,31 @@ export default function TimingsScreen() {
         </View>
 
         <View style={styles.calendarGrid}>
-          {hijriCells.map((cell, idx) => (
-            <View key={`c-${idx}`} style={styles.calendarCellWrap}>
-              <View
-                style={[
-                  styles.calendarCell,
-                  cell &&
-                  calendarMonth === new Date().getMonth() + 1 &&
-                  calendarYear === new Date().getFullYear() &&
-                  String(cell.gregorian?.day) === todayGregorianDay
-                    ? styles.calendarCellToday
-                    : null,
-                ]}
-              >
-                {cell ? (
-                  <>
-                    <Text
-                      style={[
-                        styles.gregorianDay,
-                        calendarMonth === new Date().getMonth() + 1 &&
-                        calendarYear === new Date().getFullYear() &&
-                        String(cell.gregorian?.day) === todayGregorianDay
-                          ? styles.gregorianDayToday
-                          : null,
-                      ]}
-                    >
-                      {cell.gregorian?.day}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.hijriDay,
-                        calendarMonth === new Date().getMonth() + 1 &&
-                        calendarYear === new Date().getFullYear() &&
-                        String(cell.gregorian?.day) === todayGregorianDay
-                          ? styles.hijriDayToday
-                          : null,
-                      ]}
-                    >
-                      {cell.hijri?.day}
-                    </Text>
-                  </>
-                ) : null}
+          {hijriCells.map((cell, idx) => {
+            const isToday = cell && cell.gregorian?.date === todayGregorianDate;
+            return (
+              <View key={`c-${idx}`} style={styles.calendarCellWrap}>
+                <View style={[styles.calendarCell, isToday && styles.calendarCellToday]}>
+                  {cell ? (
+                    <>
+                      {isToday ? <Text style={styles.todayBadge}>TODAY</Text> : null}
+                      <Text style={[styles.hijriDay, isToday && styles.hijriDayToday]}>
+                        {cell.hijri?.day}
+                      </Text>
+                      <Text style={[styles.gregorianDay, isToday && styles.gregorianDayToday]} numberOfLines={1}>
+                        {cell.gregorian?.day} {cell.gregorian?.month?.en?.slice(0, 3)}
+                      </Text>
+                    </>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
+      </OrnateCard>
+
+      <View style={styles.bottomStar}>
+        <GeometricDivider color={colors.goldBorder} />
       </View>
     </ScrollView>
   );
@@ -695,337 +610,402 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 16,
-    gap: 12,
-    paddingBottom: 24,
+    gap: 16,
+    paddingBottom: 110,
   },
-  heroCard: {
-    backgroundColor: '#0F7A5A',
-    borderRadius: 14,
-    padding: 14,
+
+  // Hero
+  hero: {
+    backgroundColor: colors.primaryDeep,
+    borderRadius: radius.xl,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#0B5F46',
+    borderColor: colors.primaryDark,
     overflow: 'hidden',
+    ...shadow.raised,
   },
-  heroDecorOne: {
-    position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    top: -45,
-    right: -25,
-  },
-  heroDecorTwo: {
-    position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    bottom: -30,
-    left: -20,
+  heroGoldTop: {
+    position: 'absolute', top: 0, left: '20%', right: '20%', height: 2,
+    backgroundColor: colors.gold, opacity: 0.45,
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   heroIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(197,155,39,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroTitle: {
     color: '#fff',
     fontWeight: '800',
-    fontSize: 18,
+    fontSize: 19,
+    fontFamily: fonts.serif,
   },
   heroStatus: {
-    color: 'rgba(255,255,255,0.88)',
-    marginTop: 2,
+    color: colors.onDarkMuted,
+    marginTop: 3,
     fontWeight: '600',
     fontSize: 12,
   },
   qiblaLinkButton: {
-    marginTop: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderRadius: 20,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: radius.pill,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   qiblaLinkText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 12,
   },
-  qiblaCard: {
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    padding: 10,
-  },
-  qiblaTitle: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  qiblaSubText: {
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 3,
-    fontSize: 12,
-  },
-  qiblaDial: {
-    marginTop: 8,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  qiblaNorth: {
-    position: 'absolute',
-    top: 6,
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  qiblaBaseNeedle: {
-    position: 'absolute',
-    width: 3,
-    height: 62,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderRadius: 2,
-  },
-  qiblaNeedle: {
-    position: 'absolute',
-    width: 4,
-    height: 70,
-    backgroundColor: '#8DF2C8',
-    borderRadius: 2,
-  },
-  qiblaHint: {
-    color: '#fff',
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 8,
-    fontSize: 12,
-  },
   nextPrayerPill: {
-    marginTop: 12,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    marginTop: 16,
+    backgroundColor: 'rgba(197,155,39,0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    borderColor: 'rgba(197,155,39,0.3)',
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  nextPrayerGlow: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(197,155,39,0.12)',
+    right: -30,
+    top: -30,
   },
   nextPrayerLabel: {
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    color: colors.gold,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   nextPrayerName: {
     color: '#fff',
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  nextPrayerCountdown: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontWeight: '800',
     fontSize: 16,
+    fontWeight: '800',
+    marginTop: 3,
   },
+  countdownBadge: {
+    backgroundColor: colors.gold,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+  },
+  countdownText: {
+    color: colors.primaryDeep,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dateChips: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  dateChip: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  dateChipLabel: {
+    color: colors.gold,
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  dateChipValue: {
+    color: '#fff',
+    fontSize: 12.5,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+
+  // Location
   locationText: {
     color: colors.text,
-    marginTop: 8,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 15,
   },
   locationSubText: {
     color: colors.muted,
     marginTop: 4,
+    fontSize: 12.5,
   },
   linkButton: {
-    marginTop: 10,
+    marginTop: 12,
     alignSelf: 'flex-start',
-    backgroundColor: '#ECF6F2',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
   },
   linkButtonText: {
     color: colors.primary,
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 12.5,
   },
   editorWrap: {
-    marginTop: 10,
-    gap: 8,
+    marginTop: 12,
+    gap: 10,
   },
   input: {
-    backgroundColor: '#F7FAF9',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: colors.cardAlt,
+    borderRadius: radius.sm,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#E1ECE8',
+    borderColor: colors.border,
     color: colors.text,
+    fontSize: 14,
   },
   editorActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   actionButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.sm,
+    alignItems: 'center',
   },
   primaryButton: {
     backgroundColor: colors.primary,
   },
   secondaryButton: {
-    backgroundColor: '#2D9D7A',
+    backgroundColor: colors.gold,
   },
   actionButtonText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
+    fontWeight: '800',
+    fontSize: 13,
   },
+
+  // Prayer list
   prayerList: {
-    marginTop: 10,
     gap: 8,
   },
   prayerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#FAFCFB',
+    alignItems: 'center',
+    backgroundColor: colors.cardAlt,
     borderWidth: 1,
-    borderColor: '#E8EFEC',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    borderColor: colors.borderSoft,
+    borderRadius: radius.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   prayerRowActive: {
-    backgroundColor: '#EAF6F1',
-    borderColor: '#BFE2D4',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryTint,
+  },
+  prayerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   prayerLabel: {
     color: colors.text,
     fontWeight: '700',
+    fontSize: 15,
+  },
+  prayerLabelActive: {
+    color: colors.primaryDark,
+    fontWeight: '800',
   },
   prayerValue: {
     color: colors.primary,
     fontWeight: '800',
+    fontSize: 15,
   },
   prayerValueActive: {
-    color: '#0A5A42',
+    color: colors.primaryDark,
+  },
+  adhanNoteWrap: {
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSoft,
   },
   adhanNote: {
     color: colors.muted,
-    marginTop: 10,
     fontSize: 12,
     lineHeight: 18,
+    flex: 1,
+  },
+
+  // Calendar
+  calendarHeaderBand: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    borderRadius: radius.lg,
+    padding: 14,
+    overflow: 'hidden',
   },
   calendarTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
   },
   calendarNavButton: {
-    backgroundColor: '#ECF6F2',
-    borderRadius: 16,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
   },
-  calendarNavText: {
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
+  calendarEyebrow: {
+    color: colors.goldDeep,
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   calendarMonthText: {
+    color: colors.primaryDark,
+    fontWeight: '900',
+    fontSize: 20,
+    fontFamily: fonts.serif,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  calendarTitleWrap: {
+    flex: 1,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  calendarYearText: {
     color: colors.text,
+    fontSize: 12,
     fontWeight: '800',
-    fontSize: 14,
+    marginTop: 2,
+  },
+  calendarMetaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  calendarMetaPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: radius.pill,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+  },
+  calendarMetaText: {
+    color: colors.muted,
+    fontSize: 10.5,
+    fontWeight: '800',
+    flex: 1,
   },
   calendarWeekdays: {
     flexDirection: 'row',
-    marginTop: 12,
+    marginTop: 16,
+    paddingHorizontal: 2,
   },
   weekdayText: {
     flex: 1,
     textAlign: 'center',
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '700',
+    color: colors.goldDeep,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 8,
+    marginTop: 7,
+    backgroundColor: colors.cardAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: 4,
   },
   calendarCellWrap: {
     width: '14.2857%',
-    padding: 3,
+    padding: 2.5,
   },
   calendarCell: {
-    backgroundColor: '#FAFCFB',
-    borderRadius: 7,
-    minHeight: 54,
-    padding: 4,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    minHeight: 62,
+    padding: 5,
     borderWidth: 1,
-    borderColor: '#E8EFEC',
+    borderColor: 'rgba(230,222,203,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarCellToday: {
-    backgroundColor: '#0F7A5A',
-    borderColor: '#0B5F46',
+    backgroundColor: colors.primaryDeep,
+    borderColor: colors.primaryDark,
+    ...shadow.soft,
   },
   gregorianDay: {
-    color: colors.text,
+    color: colors.muted,
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 9,
+    marginTop: 3,
   },
   gregorianDayToday: {
-    color: '#fff',
+    color: colors.onDarkMuted,
   },
   hijriDay: {
-    color: colors.muted,
-    fontSize: 11,
+    color: colors.primaryDark,
+    fontSize: 17,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
   },
   hijriDayToday: {
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.gold,
+    fontWeight: '900',
+  },
+  todayBadge: {
+    color: colors.gold,
+    fontSize: 6.5,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+    marginBottom: 2,
+    includeFontPadding: false,
+    width: '100%',
+    textAlign: 'center',
+  },
+
+  bottomStar: {
+    paddingVertical: 8,
+    alignItems: 'center',
   },
 });

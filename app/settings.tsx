@@ -1,13 +1,14 @@
 import Slider from '@react-native-community/slider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { useMutation } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -15,17 +16,28 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { deleteAccount, updatePassword } from '@/services/authService';
+import { schedulePrayerAdhan, scheduleTestAdhan } from '@/services/prayerNotificationService';
+import { useAdhanAlarm } from '@/services/adhanController';
+import { setActiveAudioVolume } from '@/services/audioManager';
+import { getAlarmVolume, setAlarmVolume } from '@/services/alarmVolume';
+import { disableBackgroundLocation, enableBackgroundLocation } from '@/services/backgroundLocation';
 import { useAuthStore } from '@/store/authStore';
-import { colors } from '@/theme/colors';
+import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { GeometricDivider } from '@/components/IslamicMotifs';
+import { FadeInView, PressableScale } from '@/components/Anim';
+import { OrnateCard, SectionHeader } from '@/components/ui';
 import {
   getUiPreferences,
   saveUiPreferences,
   uiPreferenceDefaults,
+  type UiPreferences,
 } from '@/utils/preferences';
 
 const MIN_AYAH_FONT = 18;
 const MAX_AYAH_FONT = 42;
+const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
 
 export default function SettingsScreen() {
   const token = useAuthStore((s) => s.token);
@@ -37,9 +49,95 @@ export default function SettingsScreen() {
   const [use24HourTime, setUse24HourTime] = useState(
     uiPreferenceDefaults.use24HourTime
   );
+  const [adhanAlertsEnabled, setAdhanAlertsEnabled] = useState(
+    uiPreferenceDefaults.adhanAlertsEnabled
+  );
+  const [adhanVolume, setAdhanVolume] = useState(uiPreferenceDefaults.adhanVolume);
+  const [backgroundLocationEnabled, setBackgroundLocationEnabled] = useState(
+    uiPreferenceDefaults.backgroundLocationEnabled
+  );
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+  // The pending test-adhan countdown is held in the global store, so it keeps
+  // counting (and the adhan still fires) even after leaving this screen.
+  const pendingFireAt = useAdhanAlarm((s) => s.pendingFireAt);
+  const [nowTs, setNowTs] = useState(Date.now());
+  useEffect(() => {
+    if (!pendingFireAt) return;
+    const id = setInterval(() => setNowTs(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [pendingFireAt]);
+  const testSecondsLeft = pendingFireAt ? Math.max(0, Math.ceil((pendingFireAt - nowTs) / 1000)) : 0;
+
+  const runTestAdhan = () => {
+    if (testSecondsLeft > 0) return;
+    scheduleTestAdhan(60_000).catch(() => undefined);
+    Alert.alert(
+      'Test adhan scheduled',
+      Constants.appOwnership === 'expo'
+        ? 'The adhan will play in about 1 minute. Keep the app open — Expo Go can’t play it once the app is closed.'
+        : 'A test adhan alert will fire in about 1 minute. You can background the app to test it.'
+    );
+  };
+
+  // Persist immediately on release so the next adhan/test uses the new volume
+  // without needing the Save button.
+  const persistVolume = (v: number) => {
+    setAdhanVolume(v);
+    setAlarmVolume(v); // device alarm-stream volume (real build only)
+    persistPrefs({ adhanVolume: v });
+  };
+
+  // Persist the full prefs object with an override, so a single setting can be
+  // saved immediately (without the Save button) using the latest state.
+  const persistPrefs = (override: Partial<UiPreferences>) => {
+    saveUiPreferences({
+      arabicAyahFontSize,
+      use24HourTime,
+      adhanAlertsEnabled,
+      adhanVolume,
+      backgroundLocationEnabled,
+      ...override,
+    }).catch(() => undefined);
+  };
+
+  const onToggleBackgroundLocation = (value: boolean) => {
+    if (!value) {
+      setBackgroundLocationEnabled(false);
+      persistPrefs({ backgroundLocationEnabled: false });
+      disableBackgroundLocation().catch(() => undefined);
+      return;
+    }
+    // Prominent disclosure before requesting background location (Play policy).
+    Alert.alert(
+      'Auto-update location',
+      'WeDeen will check your location in the background — even when the app is closed — only to keep prayer times and the adhan accurate while you travel. Your location stays on your device and is never shared.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Enable',
+          onPress: async () => {
+            const result = await enableBackgroundLocation();
+            if (result === 'enabled') {
+              setBackgroundLocationEnabled(true);
+              persistPrefs({ backgroundLocationEnabled: true });
+            } else {
+              setBackgroundLocationEnabled(false);
+              persistPrefs({ backgroundLocationEnabled: false });
+              Alert.alert(
+                result === 'unsupported' ? 'Not available' : 'Permission needed',
+                result === 'unsupported'
+                  ? 'Background updates need the installed app — they don’t work in Expo Go.'
+                  : 'Please allow location access “All the time” so prayer times can update while you travel.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -47,6 +145,15 @@ export default function SettingsScreen() {
         .then((prefs) => {
           setArabicAyahFontSize(prefs.arabicAyahFontSize);
           setUse24HourTime(prefs.use24HourTime);
+          setAdhanAlertsEnabled(prefs.adhanAlertsEnabled);
+          setAdhanVolume(prefs.adhanVolume);
+          setBackgroundLocationEnabled(prefs.backgroundLocationEnabled);
+        })
+        .catch(() => undefined);
+      // On a real build, show the actual device alarm volume on the slider.
+      getAlarmVolume()
+        .then((v) => {
+          if (v != null) setAdhanVolume(v);
         })
         .catch(() => undefined);
     }, [])
@@ -57,8 +164,21 @@ export default function SettingsScreen() {
       saveUiPreferences({
         arabicAyahFontSize,
         use24HourTime,
+        adhanAlertsEnabled,
+        adhanVolume,
+        backgroundLocationEnabled,
       }),
-    onSuccess: () => Alert.alert('Saved', 'Settings updated successfully.'),
+    onSuccess: async () => {
+      // Apply the adhan-alerts toggle: schedule (or cancel) based on the saved
+      // preference + location. schedulePrayerAdhan reads the freshly-saved flag.
+      try {
+        const raw = await AsyncStorage.getItem('timings_location_v1');
+        await schedulePrayerAdhan(raw ? JSON.parse(raw) : null);
+      } catch {
+        // non-fatal
+      }
+      Alert.alert('Saved', 'Settings updated successfully.');
+    },
     onError: () => Alert.alert('Error', 'Could not save settings right now.'),
   });
 
@@ -111,135 +231,240 @@ export default function SettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         automaticallyAdjustKeyboardInsets
       >
-      <View style={styles.card}>
-        <View style={styles.cardTitleRow}>
-          <Text style={styles.cardTitle}>Reading Preferences</Text>
-          <Pressable
-            onPress={() => setArabicAyahFontSize(uiPreferenceDefaults.arabicAyahFontSize)}
-            style={styles.resetPill}
-          >
-            <Text style={styles.resetPillText}>Reset</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.label}>Arabic Ayah Font Size</Text>
-        <View style={styles.fontRow}>
-          <Text style={styles.fontSizeText}>A-</Text>
-          <Slider
-            style={styles.slider}
-            minimumValue={MIN_AYAH_FONT}
-            maximumValue={MAX_AYAH_FONT}
-            step={1}
-            value={arabicAyahFontSize}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor="#D8E4DF"
-            thumbTintColor={colors.primary}
-            onValueChange={setArabicAyahFontSize}
-          />
-          <Text style={styles.fontSizeText}>A+</Text>
-        </View>
-        <Text style={styles.previewLabel}>
-          Size: {Math.round(arabicAyahFontSize)} px
-        </Text>
-        <Text style={[styles.previewArabic, { fontSize: arabicAyahFontSize, lineHeight: arabicAyahFontSize * 1.7 }]}>
-          بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Prayer Time Format</Text>
-        <View style={styles.switchRow}>
-          <Text style={styles.switchText}>
-            {use24HourTime ? '24-hour format (default)' : '12-hour format'}
-          </Text>
-          <Switch
-            value={use24HourTime}
-            onValueChange={setUse24HourTime}
-            trackColor={{ false: '#C9D7D1', true: '#8CD1B9' }}
-            thumbColor={use24HourTime ? colors.primary : '#FFFFFF'}
-          />
-        </View>
-      </View>
-
-      <Pressable
-        onPress={() => savePrefsMutation.mutate()}
-        disabled={savePrefsMutation.isPending}
-        style={[styles.saveButton, savePrefsMutation.isPending && styles.disabledButton]}
-      >
-        {savePrefsMutation.isPending ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text style={styles.saveButtonText}>Save Settings</Text>
-        )}
-      </Pressable>
-
-      {token ? (
-        <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Update Password</Text>
-            <TextInput
-              placeholder="Current Password"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-              placeholderTextColor="#8E9B95"
-              style={styles.input}
+        <OrnateCard index={0}>
+          <View style={styles.cardTitleRow}>
+            <SectionHeader
+              title="Reading Preferences"
+              icon={<MaterialCommunityIcons name="format-size" size={18} color={colors.primary} />}
+              style={{ marginBottom: 0, flex: 1 }}
             />
-            <TextInput
-              placeholder="New Password"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-              placeholderTextColor="#8E9B95"
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Confirm New Password"
-              value={confirmNewPassword}
-              onChangeText={setConfirmNewPassword}
-              secureTextEntry
-              placeholderTextColor="#8E9B95"
-              style={styles.input}
-            />
-            <Pressable
-              onPress={() => changePasswordMutation.mutate()}
-              disabled={changePasswordMutation.isPending}
-              style={[styles.inlineButton, changePasswordMutation.isPending && styles.disabledButton]}
+            <PressableScale
+              onPress={() => setArabicAyahFontSize(uiPreferenceDefaults.arabicAyahFontSize)}
+              style={styles.resetPill}
             >
-              {changePasswordMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.inlineButtonText}>Update Password</Text>
-              )}
-            </Pressable>
+              <Text style={styles.resetPillText}>Reset</Text>
+            </PressableScale>
+          </View>
+          <GeometricDivider color={colors.goldBorder} style={{ marginVertical: 14 }} />
+          <Text style={styles.label}>Arabic Ayah Font Size</Text>
+          <View style={styles.fontRow}>
+            <Text style={styles.fontSizeText}>A-</Text>
+            <Slider
+              style={styles.slider}
+              minimumValue={MIN_AYAH_FONT}
+              maximumValue={MAX_AYAH_FONT}
+              step={1}
+              value={arabicAyahFontSize}
+              minimumTrackTintColor={colors.primary}
+              maximumTrackTintColor={colors.primaryTint}
+              thumbTintColor={colors.gold}
+              onValueChange={setArabicAyahFontSize}
+            />
+            <Text style={styles.fontSizeTextLarge}>A+</Text>
+          </View>
+          <View style={styles.previewBox}>
+            <Text style={styles.previewLabel}>PREVIEW · {Math.round(arabicAyahFontSize)} px</Text>
+            <Text style={[styles.previewArabic, { fontSize: arabicAyahFontSize, lineHeight: arabicAyahFontSize * 1.7 }]}>
+              {BISMILLAH}
+            </Text>
+          </View>
+        </OrnateCard>
+
+        <OrnateCard index={1}>
+          <SectionHeader
+            title="Prayer Time Format"
+            icon={<Ionicons name="time-outline" size={18} color={colors.primary} />}
+          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchText}>
+              {use24HourTime ? '24-hour format (default)' : '12-hour format'}
+            </Text>
+            <Switch
+              value={use24HourTime}
+              onValueChange={setUse24HourTime}
+              trackColor={{ false: '#C9D7D1', true: colors.primary }}
+              thumbColor={use24HourTime ? colors.gold : '#FFFFFF'}
+            />
+          </View>
+        </OrnateCard>
+
+        <OrnateCard index={2}>
+          <SectionHeader
+            title="Adhan Alerts"
+            icon={<Ionicons name="notifications-outline" size={18} color={colors.primary} />}
+          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchText}>
+              {adhanAlertsEnabled ? 'Adhan plays at each prayer time' : 'Adhan alerts off'}
+            </Text>
+            <Switch
+              value={adhanAlertsEnabled}
+              onValueChange={setAdhanAlertsEnabled}
+              trackColor={{ false: '#C9D7D1', true: colors.primary }}
+              thumbColor={adhanAlertsEnabled ? colors.gold : '#FFFFFF'}
+            />
           </View>
 
-          <Pressable
-            onPress={() =>
-              Alert.alert('Delete Account', 'This action is permanent. Continue?', [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: () => deleteMutation.mutate(),
-                },
-              ])
-            }
-            style={[styles.dangerButton, deleteMutation.isPending && styles.disabledButton]}
-            disabled={deleteMutation.isPending}
+          <View style={styles.volumeHeaderRow}>
+            <Text style={styles.label}>Adhan Volume</Text>
+            <Text style={styles.volumePercent}>{Math.round(adhanVolume * 100)}%</Text>
+          </View>
+          <View style={styles.fontRow}>
+            <Ionicons name="volume-low" size={18} color={colors.primary} />
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={1}
+              step={0.05}
+              value={adhanVolume}
+              minimumTrackTintColor={colors.primary}
+              maximumTrackTintColor={colors.primaryTint}
+              thumbTintColor={colors.gold}
+              onValueChange={(v) => {
+                setAdhanVolume(v);
+                setActiveAudioVolume(v); // live while an adhan is ringing (in-app)
+              }}
+              onSlidingComplete={persistVolume}
+            />
+            <Ionicons name="volume-high" size={20} color={colors.primary} />
+          </View>
+
+          <Text style={styles.adhanHint}>
+            A prayer-time alarm with the adhan for all 5 daily prayers, based on your location. The
+            slider sets your phone’s alarm volume.
+          </Text>
+          <PressableScale
+            onPress={runTestAdhan}
+            disabled={testSecondsLeft > 0}
+            style={[styles.testButton, testSecondsLeft > 0 && styles.disabledButton]}
           >
-            {deleteMutation.isPending ? (
+            <Ionicons name="volume-high-outline" size={16} color={colors.primary} />
+            <Text style={styles.testButtonText}>
+              {testSecondsLeft > 0
+                ? `Adhan in 0:${String(testSecondsLeft).padStart(2, '0')}`
+                : 'Test adhan in 1 min'}
+            </Text>
+          </PressableScale>
+        </OrnateCard>
+
+        <OrnateCard index={3}>
+          <SectionHeader
+            title="Location Updates"
+            icon={<Ionicons name="navigate-outline" size={18} color={colors.primary} />}
+          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchText}>
+              {backgroundLocationEnabled ? 'Auto-updates while traveling' : 'Auto-update off'}
+            </Text>
+            <Switch
+              value={backgroundLocationEnabled}
+              onValueChange={onToggleBackgroundLocation}
+              trackColor={{ false: '#C9D7D1', true: colors.primary }}
+              thumbColor={backgroundLocationEnabled ? colors.gold : '#FFFFFF'}
+            />
+          </View>
+          <Text style={styles.adhanHint}>
+            Keeps prayer times and the adhan correct when you travel by updating your location in the
+            background. Your location stays on your device.
+          </Text>
+        </OrnateCard>
+
+        <FadeInView index={4}>
+          <PressableScale
+            onPress={() => savePrefsMutation.mutate()}
+            disabled={savePrefsMutation.isPending}
+            style={[styles.saveButton, savePrefsMutation.isPending && styles.disabledButton]}
+          >
+            {savePrefsMutation.isPending ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.saveButtonText}>Delete Account</Text>
+              <>
+                <Ionicons name="checkmark-circle" size={18} color="#fff" style={{ marginRight: 7 }} />
+                <Text style={styles.saveButtonText}>Save Settings</Text>
+              </>
             )}
-          </Pressable>
-        </>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Account Security</Text>
-          <Text style={styles.infoText}>Login to access Update Password and Delete Account.</Text>
-        </View>
-      )}
+          </PressableScale>
+        </FadeInView>
+
+        {token ? (
+          <>
+            <OrnateCard index={3}>
+              <SectionHeader
+                title="Update Password"
+                icon={<Ionicons name="lock-closed-outline" size={18} color={colors.primary} />}
+              />
+              <TextInput
+                placeholder="Current Password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="New Password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="Confirm New Password"
+                value={confirmNewPassword}
+                onChangeText={setConfirmNewPassword}
+                secureTextEntry
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+              />
+              <PressableScale
+                onPress={() => changePasswordMutation.mutate()}
+                disabled={changePasswordMutation.isPending}
+                style={[styles.inlineButton, changePasswordMutation.isPending && styles.disabledButton]}
+              >
+                {changePasswordMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.inlineButtonText}>Update Password</Text>
+                )}
+              </PressableScale>
+            </OrnateCard>
+
+            <FadeInView index={4}>
+              <PressableScale
+                onPress={() =>
+                  Alert.alert('Delete Account', 'This action is permanent. Continue?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => deleteMutation.mutate(),
+                    },
+                  ])
+                }
+                style={[styles.dangerButton, deleteMutation.isPending && styles.disabledButton]}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={17} color="#fff" style={{ marginRight: 7 }} />
+                    <Text style={styles.saveButtonText}>Delete Account</Text>
+                  </>
+                )}
+              </PressableScale>
+            </FadeInView>
+          </>
+        ) : (
+          <OrnateCard index={3}>
+            <SectionHeader
+              title="Account Security"
+              icon={<Ionicons name="shield-outline" size={18} color={colors.primary} />}
+            />
+            <Text style={styles.infoText}>Login to access Update Password and Delete Account.</Text>
+          </OrnateCard>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -247,81 +472,107 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: 16, gap: 12, paddingBottom: 24, flexGrow: 1 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 8,
-  },
-  cardTitle: { color: colors.text, fontWeight: '800', fontSize: 16, marginBottom: 2 },
+  container: { padding: 16, gap: 16, paddingBottom: 40, flexGrow: 1 },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    gap: 10,
   },
   resetPill: {
-    backgroundColor: '#ECF6F2',
+    backgroundColor: colors.goldSoft,
     borderWidth: 1,
-    borderColor: '#D7E9E2',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    borderColor: colors.goldBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
   },
   resetPillText: {
-    color: colors.primary,
-    fontWeight: '700',
+    color: colors.goldDeep,
+    fontWeight: '800',
     fontSize: 12,
   },
-  label: { color: colors.text, fontWeight: '600' },
-  fontRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  label: { color: colors.text, fontWeight: '700', fontSize: 13.5 },
+  fontRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
   slider: { flex: 1, height: 34 },
-  fontSizeText: { color: colors.primary, fontWeight: '800', fontSize: 14 },
-  previewLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  fontSizeText: { color: colors.primary, fontWeight: '800', fontSize: 13 },
+  fontSizeTextLarge: { color: colors.primary, fontWeight: '800', fontSize: 18 },
+  previewBox: {
+    marginTop: 12,
+    backgroundColor: colors.cardAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    padding: 16,
+    alignItems: 'center',
+  },
+  previewLabel: { color: colors.muted, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
   previewArabic: {
-    color: colors.text,
-    textAlign: 'right',
-    fontFamily: 'KFGQPCNastaleeq',
-    marginTop: 4,
+    color: colors.primaryDark,
+    textAlign: 'center',
+    fontFamily: fonts.arabic,
+    marginTop: 10,
   },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  switchText: { color: colors.text, fontWeight: '600' },
+  switchText: { color: colors.text, fontWeight: '600', fontSize: 14, flex: 1, paddingRight: 10 },
+  adhanHint: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginTop: 10 },
+  volumeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  volumePercent: { color: colors.primary, fontWeight: '800', fontSize: 13, fontVariant: ['tabular-nums'] },
+  testButton: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    borderRadius: radius.sm,
+    paddingVertical: 11,
+  },
+  testButtonText: { color: colors.primary, fontWeight: '800', fontSize: 13.5 },
   saveButton: {
     backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: radius.sm,
+    paddingVertical: 14,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    ...shadow.soft,
   },
-  saveButtonText: { color: '#fff', fontWeight: '700' },
+  saveButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   input: {
-    backgroundColor: '#F7FAF9',
-    borderRadius: 8,
-    paddingHorizontal: 11,
-    paddingVertical: 10,
+    backgroundColor: colors.cardAlt,
+    borderRadius: radius.sm,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E1ECE8',
+    borderColor: colors.border,
     color: colors.text,
+    fontSize: 14.5,
+    marginBottom: 10,
   },
   inlineButton: {
-    marginTop: 2,
     backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: radius.sm,
+    paddingVertical: 13,
     alignItems: 'center',
+    ...shadow.soft,
   },
-  inlineButtonText: { color: '#fff', fontWeight: '700' },
+  inlineButtonText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   dangerButton: {
-    backgroundColor: '#A02929',
-    borderRadius: 10,
-    paddingVertical: 12,
+    backgroundColor: colors.danger,
+    borderRadius: radius.sm,
+    paddingVertical: 14,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   disabledButton: { opacity: 0.7 },
-  infoText: {
-    color: colors.muted,
-    fontWeight: '600',
-  },
+  infoText: { color: colors.muted, fontWeight: '600', fontSize: 13, lineHeight: 19 },
 });

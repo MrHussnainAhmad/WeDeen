@@ -1,12 +1,15 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { forgotPassword, login, me, register } from '@/services/authService';
 import { useAuthStore } from '@/store/authStore';
-import { colors } from '@/theme/colors';
+import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { EightPointStar, GeometricDivider, StarFieldWatermark, MihrabArch } from '@/components/IslamicMotifs';
+import { FadeInView, PressableScale } from '@/components/Anim';
+import { OrnateCard } from '@/components/ui';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -58,383 +61,285 @@ export default function ProfileScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}
       >
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={[styles.container, styles.authContainer, { paddingTop: Math.max(insets.top + 96, 120) }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-      >
-        <Image source={require('@/assets/images/logo.png')} style={styles.authBgImageTop} resizeMode="contain" />
-        <Image source={require('@/assets/images/kaaba.png')} style={styles.authBgImageBottom} resizeMode="contain" />
-        <View style={styles.authHero}>
-          <View style={styles.authHeroGlowTop} />
-          <View style={styles.authHeroGlowBottom} />
-          <Pressable onPress={() => router.push('/settings')} style={styles.authSettingsFab}>
-            <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
-          </Pressable>
-          <View style={styles.authIconWrap}>
-            <Ionicons name="person-circle-outline" size={28} color="#FFFFFF" />
-          </View>
-          <Text style={styles.authHeroTitle}>
-            {mode === 'signup' ? 'Create Your Account' : 'Welcome Back'}
-          </Text>
-          <Text style={styles.authHeroSub}>
-            {mode === 'signup' ? 'Join and sync your Quran journey across devices.' : 'Sign in to continue your Quran learning progress.'}
-          </Text>
-          <View style={styles.modeSwitch}>
-            <Pressable
-              onPress={() => setMode('signup')}
-              style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
-            >
-              <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>Signup</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMode('signin')}
-              style={[styles.modeButton, mode === 'signin' && styles.modeButtonActive]}
-            >
-              <Text style={[styles.modeButtonText, mode === 'signin' && styles.modeButtonTextActive]}>Sign In</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={[styles.card, styles.authMainCard]}>
-          <Text style={styles.cardTitle}>{mode === 'signup' ? 'Account Details' : 'Sign In Details'}</Text>
-
-          {mode === 'signup' ? (
-            <TextInput
-              placeholder="Name"
-              value={name}
-              onChangeText={setName}
-              placeholderTextColor="#8E9B95"
-              style={styles.input}
-            />
-          ) : null}
-
-          <TextInput
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            placeholderTextColor="#8E9B95"
-            style={styles.input}
-          />
-          <View style={styles.passwordField}>
-            <TextInput
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              placeholderTextColor="#8E9B95"
-              style={styles.passwordInput}
-            />
-            <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6A7B74" />
-            </Pressable>
-          </View>
-
-          {mode === 'signup' ? (
-            <View style={styles.passwordField}>
-              <TextInput
-                placeholder="Confirm Password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
-                placeholderTextColor="#8E9B95"
-                style={styles.passwordInput}
-              />
-              <Pressable onPress={() => setShowConfirmPassword((v) => !v)} hitSlop={8}>
-                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6A7B74" />
-              </Pressable>
-            </View>
-          ) : null}
-
-          <Pressable
-            onPress={() => authMutation.mutate()}
-            disabled={authMutation.isPending}
-            style={[styles.actionButton, styles.primaryButton, authMutation.isPending && styles.buttonDisabled]}
-          >
-            {authMutation.isPending ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.actionButtonText}>{mode === 'signup' ? 'Signing up...' : 'Signing in...'}</Text>
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={[styles.container, styles.authContainer, { paddingTop: Math.max(insets.top + 60, 80) }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        >
+          <FadeInView index={0}>
+            <View style={styles.authHero}>
+              <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
+              <View style={styles.heroArchWrap}>
+                <MihrabArch width={130} height={64} color="rgba(197,155,39,0.32)" />
               </View>
-            ) : (
-              <Text style={styles.actionButtonText}>
-                {mode === 'signup' ? 'Signup' : 'Sign In'}
+              <View style={styles.heroGoldTop} />
+
+              <PressableScale onPress={() => router.push('/settings')} style={styles.authSettingsFab}>
+                <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+              </PressableScale>
+
+              <View style={styles.authIconWrap}>
+                <EightPointStar size={40} color="rgba(197,155,39,0.25)" />
+                <Ionicons name="person" size={24} color="#FFFFFF" style={{ position: 'absolute' }} />
+              </View>
+              <Text style={styles.authHeroTitle}>
+                {mode === 'signup' ? 'Create Your Account' : 'Welcome Back'}
               </Text>
-            )}
-          </Pressable>
+              <Text style={styles.authHeroSub}>
+                {mode === 'signup' ? 'Join and sync your Quran journey across devices.' : 'Sign in to continue your Quran learning progress.'}
+              </Text>
+              <View style={styles.modeSwitch}>
+                <PressableScale
+                  onPress={() => setMode('signup')}
+                  style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
+                >
+                  <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>Signup</Text>
+                </PressableScale>
+                <PressableScale
+                  onPress={() => setMode('signin')}
+                  style={[styles.modeButton, mode === 'signin' && styles.modeButtonActive]}
+                >
+                  <Text style={[styles.modeButtonText, mode === 'signin' && styles.modeButtonTextActive]}>Sign In</Text>
+                </PressableScale>
+              </View>
+            </View>
+          </FadeInView>
 
-          {mode === 'signin' ? (
-            <Pressable onPress={() => forgotPasswordMutation.mutate()} style={styles.linkButton}>
-              <Text style={styles.linkText}>Reset password</Text>
-            </Pressable>
-          ) : null}
+          <FadeInView index={1}>
+            <OrnateCard style={styles.authMainCard} flourish>
+              <Text style={styles.cardTitle}>{mode === 'signup' ? 'Account Details' : 'Sign In Details'}</Text>
+              <GeometricDivider color={colors.goldBorder} style={{ marginBottom: 14 }} />
 
-          <Pressable onPress={() => setMode(mode === 'signup' ? 'signin' : 'signup')} style={styles.linkButton}>
-            <Text style={styles.linkText}>
-              {mode === 'signup' ? 'Already have an account? Sign in' : 'No account yet? Signup'}
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+              {mode === 'signup' ? (
+                <View style={styles.inputField}>
+                  <Ionicons name="person-outline" size={18} color={colors.muted} />
+                  <TextInput
+                    placeholder="Name"
+                    value={name}
+                    onChangeText={setName}
+                    placeholderTextColor={colors.faint}
+                    style={styles.inputInner}
+                  />
+                </View>
+              ) : null}
+
+              <View style={styles.inputField}>
+                <Ionicons name="mail-outline" size={18} color={colors.muted} />
+                <TextInput
+                  placeholder="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholderTextColor={colors.faint}
+                  style={styles.inputInner}
+                />
+              </View>
+
+              <View style={styles.inputField}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.muted} />
+                <TextInput
+                  placeholder="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  placeholderTextColor={colors.faint}
+                  style={styles.inputInner}
+                />
+                <PressableScale onPress={() => setShowPassword((v) => !v)}>
+                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.muted} />
+                </PressableScale>
+              </View>
+
+              {mode === 'signup' ? (
+                <View style={styles.inputField}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={colors.muted} />
+                  <TextInput
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                    placeholderTextColor={colors.faint}
+                    style={styles.inputInner}
+                  />
+                  <PressableScale onPress={() => setShowConfirmPassword((v) => !v)}>
+                    <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.muted} />
+                  </PressableScale>
+                </View>
+              ) : null}
+
+              <PressableScale
+                onPress={() => authMutation.mutate()}
+                disabled={authMutation.isPending}
+                style={[styles.primaryButton, authMutation.isPending && styles.buttonDisabled]}
+              >
+                {authMutation.isPending ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.primaryButtonText}>{mode === 'signup' ? 'Signing up…' : 'Signing in…'}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryButtonText}>{mode === 'signup' ? 'Create Account' : 'Sign In'}</Text>
+                )}
+              </PressableScale>
+
+              {mode === 'signin' ? (
+                <PressableScale onPress={() => forgotPasswordMutation.mutate()} style={styles.linkButton}>
+                  <Text style={styles.linkText}>Reset password</Text>
+                </PressableScale>
+              ) : null}
+
+              <PressableScale onPress={() => setMode(mode === 'signup' ? 'signin' : 'signup')} style={styles.linkButton}>
+                <Text style={styles.linkText}>
+                  {mode === 'signup' ? 'Already have an account? Sign in' : 'No account yet? Signup'}
+                </Text>
+              </PressableScale>
+            </OrnateCard>
+          </FadeInView>
+        </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
+  const initial = (user?.name?.[0] || 'U').toUpperCase();
+
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 18, 24) }]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.profileHero}>
-        <View style={styles.profileIconCircle}>
-          <Ionicons name="person" size={24} color={colors.primary} />
+      <FadeInView index={0}>
+        <View style={styles.profileHero}>
+          <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
+          <View style={styles.heroGoldTop} />
+          <View style={styles.avatarRing}>
+            <EightPointStar size={86} color="rgba(197,155,39,0.18)" />
+            <View style={styles.avatarInner}>
+              <Text style={styles.avatarInitial}>{initial}</Text>
+            </View>
+          </View>
+          <Text style={styles.profileName}>{user?.name ?? 'User'}</Text>
+          <Text style={styles.profileEmail}>{user?.email}</Text>
+          <GeometricDivider color="rgba(197,155,39,0.5)" style={{ marginTop: 16 }} />
         </View>
-        <Text style={styles.profileName}>{user?.name ?? 'User'}</Text>
-        <Text style={styles.profileEmail}>{user?.email}</Text>
-      </View>
+      </FadeInView>
 
-      <View style={styles.bottomActions}>
-        <Pressable onPress={() => router.push('/settings')} style={[styles.actionButton, styles.primaryButton]}>
-          <Text style={styles.actionButtonText}>Settings</Text>
-        </Pressable>
+      <FadeInView index={1}>
+        <View style={styles.menuList}>
+          <PressableScale onPress={() => router.push('/settings')} style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: colors.primarySoft, borderColor: colors.primaryTint }]}>
+              <Ionicons name="settings-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuTitle}>Settings</Text>
+              <Text style={styles.menuSub}>Reading, prayer format & account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+          </PressableScale>
 
-        <Pressable onPress={() => logout()} style={[styles.actionButton, styles.mutedButton]}>
-          <Text style={styles.actionButtonText}>Logout</Text>
-        </Pressable>
-      </View>
+          <PressableScale onPress={() => router.push('/quran')} style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: colors.goldSoft, borderColor: colors.goldBorder }]}>
+              <MaterialCommunityIcons name="book-open-page-variant" size={20} color={colors.goldDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuTitle}>Read Quran</Text>
+              <Text style={styles.menuSub}>Browse all 114 Surahs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+          </PressableScale>
+        </View>
+      </FadeInView>
 
+      <FadeInView index={2}>
+        <PressableScale onPress={() => logout()} style={styles.logoutButton}>
+          <Ionicons name="log-out-outline" size={18} color={colors.danger} style={{ marginRight: 8 }} />
+          <Text style={styles.logoutText}>Logout</Text>
+        </PressableScale>
+      </FadeInView>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  container: {
-    padding: 16,
-    gap: 12,
-    paddingBottom: 24,
-    flexGrow: 1,
-  },
-  authContainer: {
-    paddingBottom: 64,
-    overflow: 'hidden',
-  },
-  authBgImageTop: {
-    position: 'absolute',
-    top: 30,
-    right: -18,
-    width: 110,
-    height: 110,
-    opacity: 0.09,
-    transform: [{ rotate: '-12deg' }],
-  },
-  authBgImageBottom: {
-    position: 'absolute',
-    bottom: 28,
-    left: -8,
-    width: 84,
-    height: 84,
-    opacity: 0.08,
-    transform: [{ rotate: '10deg' }],
-  },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  container: { padding: 16, gap: 16, paddingBottom: 110, flexGrow: 1 },
+  authContainer: { paddingBottom: 64 },
+
+  // Auth hero
   authHero: {
-    backgroundColor: '#0F7A5A',
-    borderColor: '#0B5F46',
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-    overflow: 'hidden',
+    backgroundColor: colors.primaryDeep, borderRadius: radius.xl, padding: 22, overflow: 'hidden',
+    borderWidth: 1, borderColor: colors.primaryDark, alignItems: 'flex-start', ...shadow.raised,
   },
-  authHeroGlowTop: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    top: -40,
-    right: -20,
-  },
-  authHeroGlowBottom: {
-    position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    bottom: -30,
-    left: -15,
-  },
+  heroArchWrap: { position: 'absolute', top: 0, alignSelf: 'center' },
+  heroGoldTop: { position: 'absolute', top: 0, left: '20%', right: '20%', height: 2, backgroundColor: colors.gold, opacity: 0.45 },
   authSettingsFab: {
-    position: 'absolute',
-    top: 18,
-    right: 16,
-    zIndex: 5,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', top: 18, right: 16, zIndex: 5, width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    alignItems: 'center', justifyContent: 'center',
   },
   authIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+    width: 52, height: 52, alignItems: 'center', justifyContent: 'center', marginBottom: 12, marginTop: 6,
   },
-  authHeroTitle: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 20,
-  },
-  authHeroSub: {
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
-    fontWeight: '500',
-    lineHeight: 20,
-  },
-  authMainCard: {
-    marginTop: -8,
-    borderRadius: 16,
-  },
+  authHeroTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 22, fontFamily: fonts.serif },
+  authHeroSub: { color: colors.onDarkMuted, marginTop: 5, fontWeight: '500', lineHeight: 20, fontSize: 13 },
   modeSwitch: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 999,
-    padding: 4,
-    marginTop: 12,
-    alignSelf: 'center',
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: radius.pill,
+    padding: 4, marginTop: 16, alignSelf: 'center',
   },
-  modeButton: {
-    minWidth: 94,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    alignItems: 'center',
+  modeButton: { minWidth: 100, paddingVertical: 9, paddingHorizontal: 16, borderRadius: radius.pill, alignItems: 'center' },
+  modeButtonActive: { backgroundColor: colors.gold },
+  modeButtonText: { color: colors.onDarkMuted, fontWeight: '800', fontSize: 13 },
+  modeButtonTextActive: { color: colors.primaryDeep },
+
+  authMainCard: { marginTop: 4 },
+  cardTitle: { color: colors.text, fontWeight: '800', fontSize: 17, fontFamily: fonts.serif },
+
+  inputField: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.cardAlt,
+    borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 13,
+    paddingVertical: Platform.OS === 'ios' ? 13 : 4, marginBottom: 10,
   },
-  modeButtonActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  modeButtonText: {
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '700',
-  },
-  modeButtonTextActive: {
-    color: colors.primary,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 8,
-  },
-  cardTitle: {
-    color: colors.text,
-    fontWeight: '800',
-    fontSize: 16,
-    marginBottom: 2,
-  },
-  input: {
-    backgroundColor: '#F7FAF9',
-    borderRadius: 8,
-    paddingHorizontal: 11,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E1ECE8',
-    color: colors.text,
-  },
-  passwordField: {
-    backgroundColor: '#F7FAF9',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E1ECE8',
-    paddingHorizontal: 11,
-    paddingVertical: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  passwordInput: {
-    flex: 1,
-    color: colors.text,
-    paddingVertical: 8,
-    paddingRight: 8,
-  },
-  actionButton: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
+  inputInner: { flex: 1, color: colors.text, fontSize: 14.5, paddingVertical: Platform.OS === 'ios' ? 0 : 8 },
+
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primary, borderRadius: radius.sm, paddingVertical: 14, alignItems: 'center', marginTop: 4,
+    ...shadow.soft,
   },
-  mutedButton: {
-    backgroundColor: '#5A6A63',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  bottomActions: {
-    marginTop: 'auto',
-    gap: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.8,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  linkButton: {
-    marginTop: 2,
-    alignSelf: 'flex-start',
-  },
-  linkText: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
+  primaryButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  buttonDisabled: { opacity: 0.8 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  linkButton: { marginTop: 12, alignSelf: 'center' },
+  linkText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+
+  // Logged-in profile
   profileHero: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
+    backgroundColor: colors.primaryDeep, borderRadius: radius.xl, padding: 24, alignItems: 'center',
+    overflow: 'hidden', borderWidth: 1, borderColor: colors.primaryDark, ...shadow.raised,
   },
-  profileIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#ECF6F2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+  avatarRing: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  avatarInner: {
+    position: 'absolute', width: 64, height: 64, borderRadius: 32, backgroundColor: colors.gold,
+    alignItems: 'center', justifyContent: 'center',
   },
-  profileName: {
-    color: colors.text,
-    fontWeight: '800',
-    fontSize: 19,
+  avatarInitial: { color: colors.primaryDeep, fontWeight: '900', fontSize: 28, fontFamily: fonts.serif },
+  profileName: { color: '#fff', fontWeight: '800', fontSize: 22, fontFamily: fonts.serif },
+  profileEmail: { color: colors.onDarkMuted, marginTop: 4, fontWeight: '500', fontSize: 13 },
+
+  menuList: { gap: 12 },
+  menuItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.card,
+    borderRadius: radius.lg, padding: 16, borderWidth: 1, borderColor: colors.border, ...shadow.card,
   },
-  profileEmail: {
-    color: colors.muted,
-    marginTop: 3,
-    fontWeight: '500',
+  menuIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  menuTitle: { color: colors.text, fontWeight: '800', fontSize: 15 },
+  menuSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
+
+  logoutButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.dangerSoft,
+    borderRadius: radius.md, paddingVertical: 14, borderWidth: 1, borderColor: '#F0CFC8', marginTop: 'auto',
   },
+  logoutText: { color: colors.danger, fontWeight: '800', fontSize: 14 },
 });

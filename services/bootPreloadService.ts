@@ -1,13 +1,12 @@
 ﻿import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Font from 'expo-font';
 import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getOrDownloadQuran } from './quranService';
+import { areAllBooksCached } from './hadithService';
 import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
 const BOOT_PRELOAD_DONE_KEY = 'boot_preload_done_v1';
-const ADHAN_KEY = 'adhan_file_path_v1';
-const ADHAN_URL = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg';
+const HADITH_PROMPT_ASKED_KEY = 'hadith_predownload_asked_v1';
 const ALLAH_NAMES_CACHE_KEY = 'names_allah_cache_v1';
 const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v3';
 
@@ -18,24 +17,6 @@ function buildMuhammadTextNames() {
     transliteration: item.transliteration,
     meaning: item.meaning,
   }));
-}
-
-async function ensureAdhanFile() {
-  const existing = await AsyncStorage.getItem(ADHAN_KEY);
-  if (existing) {
-    const info = await FileSystem.getInfoAsync(existing);
-    if (info.exists) return existing;
-  }
-
-  const dir = `${FileSystem.documentDirectory}audio/`;
-  await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  const target = `${dir}adhan.ogg`;
-  const info = await FileSystem.getInfoAsync(target);
-  if (!info.exists) {
-    await FileSystem.downloadAsync(ADHAN_URL, target);
-  }
-  await AsyncStorage.setItem(ADHAN_KEY, target);
-  return target;
 }
 
 async function preloadNamesTextData() {
@@ -88,13 +69,35 @@ export async function shouldRunBootPreload() {
   return !done;
 }
 
+/**
+ * Whether to show the "Download Hadith Books?" prompt. Shown once: skipped if
+ * already asked, or if every book is already cached (offline-ready). Network
+ * issues default to showing it — asking is harmless.
+ */
+export async function shouldAskHadithPredownload() {
+  const asked = await AsyncStorage.getItem(HADITH_PROMPT_ASKED_KEY);
+  if (asked) return false;
+  try {
+    if (await areAllBooksCached()) {
+      await markHadithPredownloadAsked();
+      return false;
+    }
+  } catch {
+    // Couldn't determine cache state — fall through and ask.
+  }
+  return true;
+}
+
+export async function markHadithPredownloadAsked() {
+  await AsyncStorage.setItem(HADITH_PROMPT_ASKED_KEY, '1');
+}
+
 export async function runBootPreloadOnce() {
   // Quran preload is required for first-launch completion.
   await retryQuranPreload();
 
   // Keep these non-blocking so first launch doesn't fail for optional assets.
   await Promise.allSettled([
-    ensureAdhanFile(),
     preloadNamesTextData(),
     warmupUiAssets(),
   ]);

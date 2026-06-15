@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
-import { Ionicons, FontAwesome6, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   cancelSurahAudioDownload,
   downloadSurahAudioWithProgress,
@@ -21,11 +22,14 @@ import {
   playAudio,
   stopAudio
 } from '@/services/quranService';
-import { colors } from '@/theme/colors';
+import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
+import { PressableScale } from '@/components/Anim';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 
 export default function SurahDetailScreen() {
   const { surah } = useLocalSearchParams<{ surah: string }>();
+  const insets = useSafeAreaInsets();
   const surahNumber = Number(surah);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -159,48 +163,52 @@ export default function SurahDetailScreen() {
     await onDownloadAudio(edition);
   };
 
-  const THEME = {
-    primary: colors.primary,
-    bg: colors.bg,
-    card: '#FFFFFF',
-    text: colors.text,
-    muted: colors.muted,
-    border: colors.border,
-  };
-
   return (
     <View style={styles.container}>
-      {/* Header with Surah Info */}
-      <View style={styles.header}>
-        <View style={styles.surahInfo}>
-          <View style={styles.surahLeftSection}>
+      {/* Custom Emerald Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <StarFieldWatermark rows={2} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
+        <View style={styles.headerTopRow}>
+          <PressableScale onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+          </PressableScale>
+          <View style={styles.headerCenter}>
             <Text style={styles.surahTitle}>{surahData?.englishName || 'Surah'}</Text>
             <Text style={styles.ayahCount}>{surahAyahCount} Verses</Text>
           </View>
-          <Text style={styles.surahSubtitle}>{surahData?.name}</Text>
+          <View style={styles.headerArabicWrap}>
+            <Text style={styles.surahSubtitle}>{surahData?.name}</Text>
+          </View>
         </View>
+        <GeometricDivider color="rgba(197,155,39,0.5)" style={{ marginTop: 12 }} />
       </View>
 
       {/* Control Buttons */}
       <View style={styles.controlsContainer}>
-        <Pressable
-          onPress={() => setShowReciterDropdown((prev) => !prev)}
-          disabled={isDownloading || recitersQuery.isLoading}
-          style={[styles.button, styles.buttonPrimary, isDownloading && { opacity: 0.6 }]}
-        >
-          <MaterialCommunityIcons name="microphone-outline" size={18} color="#fff" />
-          <Text style={styles.buttonText}>
-            {isDownloading ? `${Math.round(downloadProgress * 100)}%` : 'Reciter'}
-          </Text>
-        </Pressable>
-        <Pressable onPress={onPlay} style={[styles.button, styles.buttonSuccess]}>
-          <Ionicons name="play" size={18} color="#fff" />
-          <Text style={styles.buttonText}>Play</Text>
-        </Pressable>
-        <Pressable onPress={stopAudio} style={[styles.button, styles.buttonSecondary]}>
-          <Ionicons name="pause" size={18} color="#fff" />
-          <Text style={styles.buttonText}>Pause</Text>
-        </Pressable>
+        <View style={styles.buttonWrap}>
+          <PressableScale
+            onPress={() => setShowReciterDropdown((prev) => !prev)}
+            disabled={isDownloading || recitersQuery.isLoading}
+            style={[styles.button, styles.buttonPrimary, isDownloading && { opacity: 0.6 }]}
+          >
+            <MaterialCommunityIcons name="microphone-outline" size={18} color="#fff" />
+            <Text style={styles.buttonText}>
+              {isDownloading ? `${Math.round(downloadProgress * 100)}%` : 'Reciter'}
+            </Text>
+          </PressableScale>
+        </View>
+        <View style={styles.buttonWrap}>
+          <PressableScale onPress={onPlay} style={[styles.button, styles.buttonGold]}>
+            <Ionicons name="play" size={18} color={colors.primaryDeep} />
+            <Text style={[styles.buttonText, { color: colors.primaryDeep }]}>Play</Text>
+          </PressableScale>
+        </View>
+        <View style={styles.buttonWrap}>
+          <PressableScale onPress={stopAudio} style={[styles.button, styles.buttonSecondary]}>
+            <Ionicons name="pause" size={18} color="#fff" />
+            <Text style={styles.buttonText}>Pause</Text>
+          </PressableScale>
+        </View>
       </View>
 
       {/* Reciter Dropdown */}
@@ -230,7 +238,7 @@ export default function SurahDetailScreen() {
                   {item.englishName ?? item.name}
                 </Text>
                 {item.identifier === selectedEdition && (
-                  <Ionicons name="checkmark" size={20} color={THEME.primary} />
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                 )}
               </Pressable>
             )}
@@ -244,24 +252,14 @@ export default function SurahDetailScreen() {
           <View style={styles.progressHeader}>
             <View>
               <Text style={styles.progressText}>Downloading Audio</Text>
-              <Text style={styles.progressPercent}>
-                {Math.round(downloadProgress * 100)}%
-              </Text>
+              <Text style={styles.progressPercent}>{Math.round(downloadProgress * 100)}%</Text>
             </View>
-            <Pressable
-              onPress={onCancelDownload}
-              style={styles.cancelButton}
-            >
-              <Ionicons name="close" size={20} color="#E74C3C" />
+            <Pressable onPress={onCancelDownload} style={styles.cancelButton}>
+              <Ionicons name="close" size={20} color={colors.danger} />
             </Pressable>
           </View>
           <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${Math.round(downloadProgress * 100)}%` }
-              ]}
-            />
+            <View style={[styles.progressFill, { width: `${Math.round(downloadProgress * 100)}%` }]} />
           </View>
         </View>
       )}
@@ -269,14 +267,14 @@ export default function SurahDetailScreen() {
       {/* Status Messages */}
       {downloaded && (
         <View style={styles.successMessage}>
-          <Ionicons name="checkmark-circle" size={18} color={THEME.primary} />
+          <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
           <Text style={styles.successText}>Audio downloaded successfully</Text>
         </View>
       )}
 
       {statusMessage && (
         <View style={styles.infoMessage}>
-          <Ionicons name="information-circle" size={18} color="#9A5D00" />
+          <Ionicons name="information-circle" size={18} color={colors.goldDeep} />
           <Text style={styles.infoText}>{statusMessage}</Text>
         </View>
       )}
@@ -294,19 +292,27 @@ export default function SurahDetailScreen() {
         removeClippedSubviews={true}
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
-        ListEmptyComponent={
-          quranQuery.isLoading ? (
-            <View style={styles.centerContainer}>
-              <ActivityIndicator size="large" color={THEME.primary} />
+        ListHeaderComponent={
+          surahNumber !== 1 && surahNumber !== 9 ? (
+            <View style={styles.bismillahCard}>
+              <Text style={styles.bismillahText}>{'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'}</Text>
             </View>
           ) : null
         }
-        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          quranQuery.isLoading ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : null
+        }
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
         renderItem={({ item }: any) => (
           <View style={styles.ayahCard}>
             <View style={styles.ayahRow}>
               <View style={styles.ayahControlColumn}>
                 <View style={styles.ayahBadge}>
+                  <EightPointStar size={34} color={colors.primarySoft} />
                   <Text style={styles.ayahNumber}>{item.numberInSurah}</Text>
                 </View>
                 <Pressable
@@ -318,18 +324,15 @@ export default function SurahDetailScreen() {
                 >
                   <Ionicons
                     name={activeAyah === item.numberInSurah ? 'pause' : 'play'}
-                    size={16}
-                    color={activeAyah === item.numberInSurah ? '#fff' : THEME.primary}
+                    size={15}
+                    color={activeAyah === item.numberInSurah ? '#fff' : colors.primary}
                   />
                 </Pressable>
               </View>
               <Text
                 style={[
                   styles.ayahText,
-                  {
-                    fontSize: arabicAyahFontSize,
-                    lineHeight: Math.round(arabicAyahFontSize * 1.75),
-                  },
+                  { fontSize: arabicAyahFontSize, lineHeight: Math.round(arabicAyahFontSize * 1.75) },
                 ]}
               >
                 {item.text}
@@ -349,128 +352,137 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingVertical: 20,
-    backgroundColor: colors.primary,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingBottom: 18,
+    backgroundColor: colors.primaryDeep,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    overflow: 'hidden',
+    ...shadow.raised,
   },
-  surahInfo: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
+    gap: 12,
   },
-  surahLeftSection: {
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: {
     flex: 1,
   },
+  headerArabicWrap: {
+    minWidth: 90,
+    alignItems: 'flex-end',
+  },
   surahTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#fff',
-    marginBottom: 4,
+    fontFamily: fonts.serif,
   },
   surahSubtitle: {
-    fontSize: 24,
-    color: '#fff',
-    fontFamily: 'KFGQPCNastaleeq',
-    fontWeight: '600',
+    fontSize: 28,
+    color: colors.gold,
+    fontFamily: fonts.arabic,
     textAlign: 'right',
-    minWidth: 100,
   },
   ayahCount: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12.5,
+    color: colors.onDarkMuted,
     fontWeight: '600',
     letterSpacing: 0.5,
+    marginTop: 2,
   },
   controlsContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: colors.bg,
+  },
+  buttonWrap: {
+    flex: 1,
   },
   button: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 13,
+    borderRadius: radius.sm,
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadow.soft,
   },
   buttonPrimary: {
     backgroundColor: colors.primary,
   },
-  buttonSuccess: {
-    backgroundColor: '#27AE60',
+  buttonGold: {
+    backgroundColor: colors.gold,
   },
   buttonSecondary: {
-    backgroundColor: '#7F8C8D',
+    backgroundColor: colors.muted,
   },
   buttonText: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 13,
   },
   reciterDropdown: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
   },
   reciterTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginBottom: 10,
+    fontFamily: fonts.serif,
   },
   reciterItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 11,
+    borderRadius: radius.sm,
     marginBottom: 6,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.cardAlt,
   },
   reciterItemActive: {
-    backgroundColor: 'rgba(15, 122, 90, 0.1)',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
   },
   reciterItemText: {
     fontSize: 14,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: '600',
     flex: 1,
   },
   reciterItemTextActive: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.primary,
   },
   progressContainer: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
     padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -480,7 +492,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   progressPercent: {
@@ -492,19 +504,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    backgroundColor: colors.dangerSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   progressBar: {
     height: 8,
-    backgroundColor: colors.border,
+    backgroundColor: colors.bgDeep,
     borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.gold,
     borderRadius: 4,
   },
   successMessage: {
@@ -514,13 +526,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(15, 122, 90, 0.1)',
-    borderRadius: 10,
+    paddingVertical: 11,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
   },
   successText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.primary,
   },
   infoMessage: {
@@ -530,73 +544,86 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(154, 93, 0, 0.1)',
-    borderRadius: 10,
+    paddingVertical: 11,
+    backgroundColor: colors.goldSoft,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
   },
   infoText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#9A5D00',
+    fontWeight: '700',
+    color: colors.goldDeep,
+    flex: 1,
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+  },
+  bismillahCard: {
+    alignItems: 'center',
+    paddingVertical: 18,
+    marginBottom: 4,
+  },
+  bismillahText: {
+    fontFamily: fonts.arabic,
+    color: colors.primaryDark,
+    fontSize: 26,
+    lineHeight: 46,
+    textAlign: 'center',
   },
   ayahCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRightWidth: 4,
+    borderRightColor: colors.gold,
+    ...shadow.soft,
   },
   ayahRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 14,
   },
   ayahControlColumn: {
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   ayahBadge: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(15, 122, 90, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   ayahNumber: {
-    fontSize: 14,
-    fontWeight: '700',
+    position: 'absolute',
+    fontSize: 12.5,
+    fontWeight: '900',
     color: colors.primary,
   },
   playButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(15, 122, 90, 0.1)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   playButtonActive: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   ayahText: {
     flex: 1,
-    marginTop: 34,
+    marginTop: 6,
     color: colors.text,
     textAlign: 'right',
-    fontFamily: 'KFGQPCNastaleeq',
-    fontWeight: '500',
+    fontFamily: fonts.arabic,
   },
   centerContainer: {
     flex: 1,
