@@ -11,6 +11,9 @@ import {
 const QURAN_KEY = 'quran_uthmani_full_v1';
 const QURAN_FILE_DIR = `${FileSystem.documentDirectory}quran/`;
 const QURAN_FILE_PATH = `${QURAN_FILE_DIR}quran-uthmani-full-v1.json`;
+// Temp target for the streamed first-launch download; promoted to QURAN_FILE_PATH
+// only once the payload validates, so a half-finished download never poisons the cache.
+const QURAN_TMP_PATH = `${QURAN_FILE_DIR}quran-download.tmp`;
 const AUDIO_MAP_KEY = 'surah_audio_paths_v1';
 const AYAH_AUDIO_MAP_KEY = 'ayah_audio_paths_v1';
 const ACTIVE_RECITER_KEY = 'active_reciter_by_surah_v1';
@@ -67,7 +70,21 @@ function normalizeSurahAudioMapShape(
   }
 }
 
-export async function getOrDownloadQuran() {
+export type QuranDownloadProgress = {
+  /** 0..1 fraction of bytes received. Null while the total size is still unknown. */
+  fraction: number | null;
+  bytesWritten: number;
+  totalBytes: number | null;
+  /** Bytes per second over the most recent sampling window. */
+  bytesPerSecond: number;
+};
+
+// Public Quran source (Uthmani text). Reports Content-Length on GET, so a streamed
+// download yields a real percentage. The backend mirror has no streamable path, so
+// the boot download streams straight from here.
+const QURAN_REMOTE_URL = 'https://api.alquran.cloud/v1/quran/quran-uthmani';
+
+export async function getOrDownloadQuran(onProgress?: (p: QuranDownloadProgress) => void) {
   const fileCached = await readQuranFromFile();
   if (fileCached) return fileCached;
 
@@ -75,12 +92,89 @@ export async function getOrDownloadQuran() {
   // On Android this can fail with CursorWindow row-size errors, so we avoid reading it.
   await AsyncStorage.removeItem(QURAN_KEY).catch(() => undefined);
 
+  // Preferred path: stream to a file so we can report real download progress and
+  // speed on the first-launch boot screen.
+  if (onProgress) {
+    const streamed = await downloadQuranToFileWithProgress(onProgress);
+    if (streamed) return streamed;
+    // Streaming failed (e.g. no Content-Length / network) — fall back below.
+  }
+
   const data = await fetchQuranFromNetwork();
   // Only save valid data to avoid corrupting cache
   if (isValidQuranPayload(data)) {
     await writeQuranToFile(data);
   }
   return normalizeQuranPayload(data);
+}
+
+// Stream the Quran JSON to a temp file, emitting byte progress + speed, then
+// validate and promote it to the real cache path. Returns the parsed payload, or
+// null if anything went wrong (caller falls back to the in-memory fetch).
+async function downloadQuranToFileWithProgress(
+  onProgress: (p: QuranDownloadProgress) => void
+) {
+  try {
+    await FileSystem.makeDirectoryAsync(QURAN_FILE_DIR, { intermediates: true });
+    await FileSystem.deleteAsync(QURAN_TMP_PATH, { idempotent: true }).catch(() => undefined);
+
+    // Speed is sampled over a short rolling window so the readout reflects the
+    // current connection rather than a cumulative average.
+    let windowStartBytes = 0;
+    let windowStart = Date.now();
+    let lastSpeed = 0;
+    let lastWritten = 0;
+    let lastTotal: number | null = null;
+
+    const download = FileSystem.createDownloadResumable(
+      QURAN_REMOTE_URL,
+      QURAN_TMP_PATH,
+      {},
+      (event) => {
+        const total = event.totalBytesExpectedToWrite > 0 ? event.totalBytesExpectedToWrite : null;
+        const written = event.totalBytesWritten;
+        lastWritten = written;
+        lastTotal = total;
+
+        const now = Date.now();
+        const elapsed = now - windowStart;
+        if (elapsed >= 400) {
+          lastSpeed = ((written - windowStartBytes) / elapsed) * 1000;
+          windowStartBytes = written;
+          windowStart = now;
+        }
+
+        onProgress({
+          fraction: total ? Math.max(0, Math.min(1, written / total)) : null,
+          bytesWritten: written,
+          totalBytes: total,
+          bytesPerSecond: lastSpeed,
+        });
+      }
+    );
+
+    const result = await download.downloadAsync();
+    if (!result?.uri) return null;
+
+    const raw = await FileSystem.readAsStringAsync(QURAN_TMP_PATH);
+    const parsed = JSON.parse(raw);
+    if (!isValidQuranPayload(parsed)) return null;
+
+    // Promote temp → final cache path.
+    await FileSystem.deleteAsync(QURAN_FILE_PATH, { idempotent: true }).catch(() => undefined);
+    await FileSystem.moveAsync({ from: QURAN_TMP_PATH, to: QURAN_FILE_PATH });
+
+    onProgress({
+      fraction: 1,
+      bytesWritten: lastWritten,
+      totalBytes: lastTotal ?? lastWritten,
+      bytesPerSecond: lastSpeed,
+    });
+    return normalizeQuranPayload(parsed);
+  } catch {
+    await FileSystem.deleteAsync(QURAN_TMP_PATH, { idempotent: true }).catch(() => undefined);
+    return null;
+  }
 }
 
 export async function refreshQuranCacheInBackground() {

@@ -3,8 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, AppState, Easing, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, AppState, Easing, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 import { EightPointStar, GeometricDivider } from '@/components/IslamicMotifs';
@@ -16,6 +17,7 @@ import {
   shouldRunBootPreload,
 } from '@/services/bootPreloadService';
 import { cacheAllBooksInBackground } from '@/services/hadithService';
+import type { QuranDownloadProgress } from '@/services/quranService';
 import { handleAdhanAction, schedulePrayerAdhan } from '@/services/prayerNotificationService';
 import { ringAdhan } from '@/services/adhanController';
 import { maybeRefreshLocation } from '@/services/locationService';
@@ -26,11 +28,48 @@ const SAVED_LOCATION_KEY = 'timings_location_v1';
 
 const queryClient = new QueryClient();
 
+// Hold the native splash (ivory) on screen until we've decided whether this is a
+// first launch (show the "Preparing your journey" boot screen) or a repeat launch
+// (go straight to home). This prevents the brief green flash that used to appear
+// when the boot screen mounted and immediately faded out on every launch.
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// --- Boot-screen download readout helpers ---------------------------------
+function formatBytes(bytes: number) {
+  if (!bytes || bytes < 0) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  const kb = bytes / 1024;
+  return `${Math.max(1, Math.round(kb))} KB`;
+}
+
+// "1.8 / 4.5 MB" while downloading; bytes-only if the total isn't known yet.
+function formatProgressMeta(p: QuranDownloadProgress | null) {
+  if (!p || (!p.bytesWritten && !p.totalBytes)) return '';
+  if (p.totalBytes) return `${formatBytes(p.bytesWritten)} / ${formatBytes(p.totalBytes)}`;
+  return formatBytes(p.bytesWritten);
+}
+
+// Live download speed, e.g. "1.2 MB/s" or "340 KB/s".
+function formatSpeed(bytesPerSecond?: number) {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return 'Downloading the Holy Quran…';
+  const mbs = bytesPerSecond / (1024 * 1024);
+  if (mbs >= 1) return `${mbs.toFixed(1)} MB/s`;
+  const kbs = bytesPerSecond / 1024;
+  return `${Math.max(1, Math.round(kbs))} KB/s`;
+}
+
 export default function RootLayout() {
   const hydrate = useAuthStore((s) => s.hydrate);
   const [bootDone, setBootDone] = useState(false);
+  // null = still deciding; true = first launch (show boot screen); false = repeat
+  // launch (skip boot screen entirely).
+  const [needsBoot, setNeedsBoot] = useState<boolean | null>(null);
   const [showHadithPrompt, setShowHadithPrompt] = useState(false);
+  // Live Quran download progress shown on the first-launch boot screen.
+  const [quranProgress, setQuranProgress] = useState<QuranDownloadProgress | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const barAnim = useRef(new Animated.Value(0)).current;
   const [fontsLoaded] = useFonts({
     KFGQPCNastaleeq: require('@/assets/fonts/KFGQPCNastaleeq-Regular.ttf'),
     NotoNastaliqUrdu: require('@/assets/fonts/NotoNastaliqUrdu-Regular.ttf'),
@@ -71,13 +110,24 @@ export default function RootLayout() {
         handleNotification: async (notification) => {
           const data = notification.request.content.data;
           const isAdhan = data?.type === 'adhan';
-          // In the foreground, show the alarm pop-up + full adhan instead of the
-          // short notification clip.
-          if (isAdhan) ringAdhan(String(data?.prayer ?? 'Prayer')).catch(() => undefined);
+          if (isAdhan) {
+            // App is in the foreground: show ONLY the full-screen in-app alarm
+            // (with Stop/Snooze) and play the full adhan. Suppress the OS
+            // banner/list/sound so the user gets a single alert, not a duplicate
+            // notification in the bar alongside the modal.
+            ringAdhan(String(data?.prayer ?? 'Prayer')).catch(() => undefined);
+            return {
+              shouldShowBanner: false,
+              shouldShowList: false,
+              shouldPlaySound: false,
+              shouldSetBadge: false,
+            };
+          }
+          // Non-adhan notifications behave normally.
           return {
             shouldShowBanner: true,
             shouldShowList: true,
-            shouldPlaySound: !isAdhan,
+            shouldPlaySound: true,
             shouldSetBadge: false,
           };
         },
@@ -164,22 +214,46 @@ export default function RootLayout() {
     if (!fontsLoaded) return;
     let mounted = true;
     const run = async () => {
+      // Decide up front (fast AsyncStorage reads) whether this launch has any
+      // work to show the boot screen for. Until this resolves we render nothing
+      // and the native splash stays up — so a repeat launch never flashes the
+      // green boot screen.
+      let shouldRun = false;
       try {
-        const shouldRun = await shouldRunBootPreload();
-        if (shouldRun) {
-          await runBootPreloadOnce();
-        }
+        shouldRun = await shouldRunBootPreload();
       } catch {
-        // Non-blocking: let app continue even if a preload step fails.
+        shouldRun = false;
       }
-
-      // After the Quran has cached, offer to predownload the hadith books.
       let ask = false;
       try {
         ask = await shouldAskHadithPredownload();
       } catch {
         ask = false;
       }
+      if (!mounted) return;
+
+      if (!shouldRun && !ask) {
+        // Repeat launch: nothing to prepare. Hand the native splash straight to
+        // home — no green boot screen, no fade.
+        setNeedsBoot(false);
+        setBootDone(true);
+        return;
+      }
+
+      // First launch (or a pending hadith prompt): reveal the boot screen, then
+      // do the heavy work behind it.
+      setNeedsBoot(true);
+
+      if (shouldRun) {
+        try {
+          await runBootPreloadOnce((p) => {
+            if (mounted) setQuranProgress(p);
+          });
+        } catch {
+          // Non-blocking: let app continue even if a preload step fails.
+        }
+      }
+
       if (!mounted) return;
       if (ask) {
         setShowHadithPrompt(true); // keep the boot screen; wait for the user's choice
@@ -194,14 +268,40 @@ export default function RootLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
+  // Animate the progress bar toward the latest fraction so it glides instead of
+  // jumping between byte-progress callbacks. While the total size is still unknown
+  // (fraction null) we leave the bar where it is and rely on the text readout.
+  useEffect(() => {
+    const fraction = quranProgress?.fraction;
+    if (fraction == null) return;
+    Animated.timing(barAnim, {
+      toValue: fraction,
+      duration: 220,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [quranProgress?.fraction, barAnim]);
+
+  // Hide the native splash only once the first real screen (boot screen on a
+  // first launch, or home on a repeat launch) has laid out — eliminating any
+  // blank/green frame between the splash and the app.
+  const onLayoutRootView = useCallback(() => {
+    SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
+
+  // Still deciding (or fonts loading): keep the native splash up by rendering
+  // nothing.
+  if (!fontsLoaded || needsBoot === null) {
     return null;
   }
 
-  if (!bootDone) {
+  if (needsBoot && !bootDone) {
     return (
       <>
-      <Animated.View style={[styles.bootScreen, { opacity: fadeAnim }]}>
+      <Animated.View
+        style={[styles.bootScreen, { opacity: fadeAnim }]}
+        onLayout={onLayoutRootView}
+      >
         <View style={styles.bootStarTop}>
           <EightPointStar size={26} color={colors.goldBorder} filled={false} />
         </View>
@@ -212,7 +312,34 @@ export default function RootLayout() {
           {showHadithPrompt ? 'Almost ready' : 'Preparing your journey…'}
         </Text>
         {showHadithPrompt ? null : (
-          <ActivityIndicator size="small" color={colors.gold} style={styles.loader} />
+          <View style={styles.progressBlock}>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: barAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                    }),
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.progressMetaRow}>
+              <Text style={styles.progressPercent}>
+                {quranProgress?.fraction != null
+                  ? `${Math.round(quranProgress.fraction * 100)}%`
+                  : 'Connecting…'}
+              </Text>
+              <Text style={styles.progressMeta}>
+                {formatProgressMeta(quranProgress)}
+              </Text>
+            </View>
+            <Text style={styles.progressHint}>
+              {formatSpeed(quranProgress?.bytesPerSecond)}
+            </Text>
+          </View>
         )}
       </Animated.View>
       <HadithPredownloadPrompt
@@ -225,6 +352,7 @@ export default function RootLayout() {
   }
 
   return (
+    <View style={styles.flex} onLayout={onLayoutRootView}>
     <QueryClientProvider client={queryClient}>
       <Stack
         screenOptions={{
@@ -253,10 +381,14 @@ export default function RootLayout() {
       </Stack>
       <AdhanAlarmModal />
     </QueryClientProvider>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   bootScreen: {
     flex: 1,
     backgroundColor: colors.primaryDeep,
@@ -286,7 +418,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
   },
-  loader: {
-    marginTop: 14,
+  progressBlock: {
+    width: '78%',
+    maxWidth: 320,
+    marginTop: 22,
+  },
+  progressTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: colors.gold,
+  },
+  progressMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  progressPercent: {
+    color: colors.gold,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  progressMeta: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  progressHint: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11.5,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 8,
+    letterSpacing: 0.2,
   },
 });

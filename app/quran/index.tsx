@@ -12,7 +12,7 @@ export default function QuranListScreen() {
   const insets = useSafeAreaInsets();
   const { data, error, isLoading, isError, refetch } = useQuery({
     queryKey: ['quran-full'],
-    queryFn: getOrDownloadQuran
+    queryFn: () => getOrDownloadQuran()
   });
 
   if (isLoading) {

@@ -45,7 +45,7 @@ export default function SurahDetailScreen() {
     uiPreferenceDefaults.arabicAyahFontSize
   );
 
-  const quranQuery = useQuery({ queryKey: ['quran-full'], queryFn: getOrDownloadQuran });
+  const quranQuery = useQuery({ queryKey: ['quran-full'], queryFn: () => getOrDownloadQuran() });
   const recitersQuery = useQuery({ queryKey: ['reciters'], queryFn: getReciters });
   const surahData = quranQuery.data?.surahs?.find((s: any) => s.number === surahNumber);
   const surahAyahCount =

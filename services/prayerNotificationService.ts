@@ -227,8 +227,27 @@ export async function cancelAllPrayerAdhan() {
  * Schedule adhan notifications for the next `days` days at the given location.
  * Idempotent within a day/location via a signature so repeated launches don't
  * churn. Respects the `adhanAlertsEnabled` preference (disabled → cancels all).
+ *
+ * Serialized: the boot effect and the location-refresh effect can both call this
+ * near-simultaneously. Without a lock they could each pass the signature guard
+ * before either writes it, schedule the full set, and leave DUPLICATE
+ * notifications in the bar. The in-flight promise guarantees one runs at a time.
  */
-export async function schedulePrayerAdhan(
+let schedulingPromise: Promise<boolean> | null = null;
+
+export function schedulePrayerAdhan(
+  location: AdhanLocation | null,
+  options: { days?: number } = {}
+): Promise<boolean> {
+  const run = (schedulingPromise ?? Promise.resolve(true)).then(() =>
+    schedulePrayerAdhanInner(location, options)
+  );
+  // Keep the chain alive for the next caller, but don't let a rejection poison it.
+  schedulingPromise = run.catch(() => false);
+  return run;
+}
+
+async function schedulePrayerAdhanInner(
   location: AdhanLocation | null,
   options: { days?: number } = {}
 ): Promise<boolean> {

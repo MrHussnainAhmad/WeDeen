@@ -1,7 +1,7 @@
 ﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Font from 'expo-font';
 import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { getOrDownloadQuran } from './quranService';
+import { getOrDownloadQuran, type QuranDownloadProgress } from './quranService';
 import { areAllBooksCached } from './hadithService';
 import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
@@ -43,12 +43,16 @@ async function warmupUiAssets() {
   });
 }
 
-async function retryQuranPreload(maxAttempts = 3, delayMs = 1200) {
+async function retryQuranPreload(
+  onProgress?: (p: QuranDownloadProgress) => void,
+  maxAttempts = 3,
+  delayMs = 1200
+) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       console.log(`[Boot] Quran preload attempt ${attempt}/${maxAttempts}...`);
-      await getOrDownloadQuran();
+      await getOrDownloadQuran(onProgress);
       console.log('[Boot] Quran preload succeeded');
       return;
     } catch (error) {
@@ -92,9 +96,11 @@ export async function markHadithPredownloadAsked() {
   await AsyncStorage.setItem(HADITH_PROMPT_ASKED_KEY, '1');
 }
 
-export async function runBootPreloadOnce() {
+export async function runBootPreloadOnce(
+  onQuranProgress?: (p: QuranDownloadProgress) => void
+) {
   // Quran preload is required for first-launch completion.
-  await retryQuranPreload();
+  await retryQuranPreload(onQuranProgress);
 
   // Keep these non-blocking so first launch doesn't fail for optional assets.
   await Promise.allSettled([

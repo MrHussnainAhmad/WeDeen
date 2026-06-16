@@ -52,11 +52,32 @@ async function getOrCreateDeviceSeed() {
   return created;
 }
 
+// Free, CDN-hosted hadith dataset (fawazahmed0/hadith-api) — same source the
+// hadith library uses. Replaces api.hadith.gading.dev, which now 402s on every
+// request. Sahih Muslim is numbered 1..7563 in this dataset.
+const HADITH_CDN = 'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions';
+const MUSLIM_HADITH_COUNT = 7563;
+
+// Fetch one hadith by number, preferring the original Arabic and falling back to
+// the English translation so the card always has text to show.
+async function fetchDailyHadith(index: number): Promise<string> {
+  for (const edition of ['ara-muslim', 'eng-muslim']) {
+    try {
+      const res = await axios.get(`${HADITH_CDN}/${edition}/${index}.min.json`, { timeout: 12000 });
+      const text = res.data?.hadiths?.[0]?.text;
+      if (text) return text;
+    } catch {
+      // try the next edition
+    }
+  }
+  return 'Hadith unavailable';
+}
+
 export function useDailyIslamicData() {
   const localDateKey = getLocalDateKey(new Date());
 
   return useQuery({
-    queryKey: ['daily-islamic-data-v6', localDateKey],
+    queryKey: ['daily-islamic-data-v7', localDateKey],
     queryFn: async () => {
       const now = new Date();
       const today = formatTodayForAladhan(now);
@@ -64,13 +85,13 @@ export function useDailyIslamicData() {
       const seed = await getOrCreateDeviceSeed();
 
       const ayahIndex = (hashString(`${seed}:${dateKey}:reminder`) % 6236) + 1;
-      const hadithIndex = (hashString(`${seed}:${dateKey}:hadith`) % 4930) + 1;
+      const hadithIndex = (hashString(`${seed}:${dateKey}:hadith`) % MUSLIM_HADITH_COUNT) + 1;
 
       const [hijriRes, reminderRes, hadithRes] = await Promise.allSettled([
         axios.get(`https://api.aladhan.com/v1/gToH?date=${today}`, { timeout: 12000 }),
         // Fetch the original Arabic (Uthmani) alongside the English translation in one call.
         ummahApi.get(`/ayah/${ayahIndex}/editions/quran-uthmani,en.asad`),
-        axios.get(`https://api.hadith.gading.dev/books/muslim/${hadithIndex}`, { timeout: 12000 })
+        fetchDailyHadith(hadithIndex)
       ]);
 
       const hijri = hijriRes.status === 'fulfilled' ? hijriRes.value.data?.data?.hijri : null;
@@ -96,12 +117,7 @@ export function useDailyIslamicData() {
       const verseReference =
         surahEnglish && ayahNumberInSurah ? `${surahEnglish} · ${surahNumber}:${ayahNumberInSurah}` : null;
 
-      const hadith =
-        hadithRes.status === 'fulfilled'
-          ? hadithRes.value.data?.data?.contents?.arab ??
-            hadithRes.value.data?.data?.contents?.id ??
-            'Hadith unavailable'
-          : 'Hadith unavailable';
+      const hadith = hadithRes.status === 'fulfilled' ? hadithRes.value : 'Hadith unavailable';
 
       const dailyAzkarStart = hashString(`azkar:${dateKey}`) % AZKAR_POOL.length;
       const azkar = Array.from({ length: 4 }, (_, i) => AZKAR_POOL[(dailyAzkarStart + i) % AZKAR_POOL.length]);
