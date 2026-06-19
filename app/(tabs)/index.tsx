@@ -140,7 +140,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { gap: 18, paddingBottom: 120 },
+  content: { gap: 18, paddingBottom: 128 },
   section: { paddingHorizontal: 16 },
   errorBanner: {
     flexDirection: 'row',

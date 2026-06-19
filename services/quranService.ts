@@ -84,6 +84,11 @@ export type QuranDownloadProgress = {
 // the boot download streams straight from here.
 const QURAN_REMOTE_URL = 'https://api.alquran.cloud/v1/quran/quran-uthmani';
 
+export async function isQuranFileCached() {
+  const fileCached = await readQuranFromFile();
+  return !!fileCached;
+}
+
 export async function getOrDownloadQuran(onProgress?: (p: QuranDownloadProgress) => void) {
   const fileCached = await readQuranFromFile();
   if (fileCached) return fileCached;
@@ -215,6 +220,7 @@ export function warmQuranCacheInBackground() {
   if (quranWarmupPromise) return quranWarmupPromise;
   quranWarmupPromise = (async () => {
     try {
+      if (await isQuranFileCached()) return;
       await getOrDownloadQuran();
     } finally {
       quranWarmupPromise = null;

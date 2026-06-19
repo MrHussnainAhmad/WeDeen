@@ -2,7 +2,7 @@ import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useMutation } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -367,6 +367,24 @@ export default function SettingsScreen() {
 
         <OrnateCard index={3}>
           <SectionHeader
+            title="Prayer Lock"
+            icon={<Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />}
+          />
+          <Text style={styles.adhanHint}>
+            Pause Instagram, YouTube, WhatsApp and other distracting apps during each prayer.
+            Open WeDeen and confirm your salah to unlock them again.
+          </Text>
+          <PressableScale
+            onPress={() => router.push('/(tabs)/prayer-lock' as any)}
+            style={styles.testButton}
+          >
+            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Text style={styles.testButtonText}>Open Prayer Lock</Text>
+          </PressableScale>
+        </OrnateCard>
+
+        <OrnateCard index={4}>
+          <SectionHeader
             title="Location Updates"
             icon={<Ionicons name="navigate-outline" size={18} color={colors.primary} />}
           />
@@ -387,7 +405,7 @@ export default function SettingsScreen() {
           </Text>
         </OrnateCard>
 
-        <FadeInView index={4}>
+        <FadeInView index={5}>
           <PressableScale
             onPress={() => savePrefsMutation.mutate()}
             disabled={savePrefsMutation.isPending}

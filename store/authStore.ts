@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { me } from '@/services/authService';
+import { syncMemorizationQueue } from '@/services/memorizationService';
 import { clearToken, clearUser, getToken, getUser, saveToken, saveUser } from '@/utils/secure';
 import type { User } from '@/types';
 
@@ -19,6 +20,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuth: async (token, user) => {
     await Promise.all([saveToken(token), saveUser(user)]);
     set({ token, user });
+    syncMemorizationQueue(token).catch(() => undefined);
   },
   logout: async () => {
     await Promise.all([clearToken(), clearUser()]);
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (get().token !== token) return;
       set({ user: profile.user });
       await saveUser(profile.user);
+      syncMemorizationQueue(token).catch(() => undefined);
     } catch (err: any) {
       const status = err?.response?.status;
       // Only sign out when the server explicitly rejects the token. Network

@@ -63,7 +63,13 @@ export default function ProfileScreen() {
       >
         <ScrollView
           style={styles.screen}
-          contentContainerStyle={[styles.container, styles.authContainer, { paddingTop: Math.max(insets.top + 60, 80) }]}
+          contentContainerStyle={[
+            styles.container,
+            {
+              paddingTop: Math.max(insets.top + 60, 80),
+              paddingBottom: Math.max(insets.bottom + 120, 140),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
@@ -265,8 +271,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: 16, gap: 16, paddingBottom: 110, flexGrow: 1 },
-  authContainer: { paddingBottom: 64 },
+  container: { padding: 16, gap: 16, paddingBottom: 128, flexGrow: 1 },
 
   // Auth hero
   authHero: {

@@ -1,7 +1,7 @@
 ﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Font from 'expo-font';
 import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { getOrDownloadQuran, type QuranDownloadProgress } from './quranService';
+import { getOrDownloadQuran, isQuranFileCached, type QuranDownloadProgress } from './quranService';
 import { areAllBooksCached } from './hadithService';
 import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
@@ -9,6 +9,13 @@ const BOOT_PRELOAD_DONE_KEY = 'boot_preload_done_v1';
 const HADITH_PROMPT_ASKED_KEY = 'hadith_predownload_asked_v1';
 const ALLAH_NAMES_CACHE_KEY = 'names_allah_cache_v1';
 const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v3';
+
+/** Max time to keep the user on the first-launch boot screen for Quran download. */
+const BOOT_QURAN_BUDGET_MS = 10_000;
+
+export type BootPreloadResult = 'completed_on_boot' | 'continued_in_background';
+
+let backgroundPreloadPromise: Promise<void> | null = null;
 
 function buildMuhammadTextNames() {
   return MUHAMMAD_99_NAMES.map((item, index) => ({
@@ -51,13 +58,9 @@ async function retryQuranPreload(
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      console.log(`[Boot] Quran preload attempt ${attempt}/${maxAttempts}...`);
       await getOrDownloadQuran(onProgress);
-      console.log('[Boot] Quran preload succeeded');
       return;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.warn(`[Boot] Quran preload attempt ${attempt} failed:`, errorMsg);
       lastError = error;
       if (attempt < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -68,16 +71,44 @@ async function retryQuranPreload(
   throw new Error(`QURAN_PRELOAD_FAILED: ${finalError}`);
 }
 
-export async function shouldRunBootPreload() {
-  const done = await AsyncStorage.getItem(BOOT_PRELOAD_DONE_KEY);
-  return !done;
+async function finishOptionalBootAssets() {
+  await Promise.allSettled([preloadNamesTextData(), warmupUiAssets()]);
 }
 
-/**
- * Whether to show the "Download Hadith Books?" prompt. Shown once: skipped if
- * already asked, or if every book is already cached (offline-ready). Network
- * issues default to showing it — asking is harmless.
- */
+async function markBootFlowComplete() {
+  await AsyncStorage.setItem(BOOT_PRELOAD_DONE_KEY, '1');
+}
+
+/** Continue Quran + optional assets after the user has entered the app. */
+export function continueBootPreloadInBackground() {
+  if (backgroundPreloadPromise) return backgroundPreloadPromise;
+
+  backgroundPreloadPromise = (async () => {
+    try {
+      if (!(await isQuranFileCached())) {
+        await retryQuranPreload(undefined, 5, 2000);
+      }
+      await finishOptionalBootAssets();
+    } catch {
+      // Quran reader will retry on demand.
+    } finally {
+      backgroundPreloadPromise = null;
+    }
+  })();
+
+  return backgroundPreloadPromise;
+}
+
+export async function shouldRunBootPreload() {
+  const done = await AsyncStorage.getItem(BOOT_PRELOAD_DONE_KEY);
+  if (done) return false;
+  if (await isQuranFileCached()) {
+    await markBootFlowComplete();
+    return false;
+  }
+  return true;
+}
+
 export async function shouldAskHadithPredownload() {
   const asked = await AsyncStorage.getItem(HADITH_PROMPT_ASKED_KEY);
   if (asked) return false;
@@ -96,19 +127,39 @@ export async function markHadithPredownloadAsked() {
   await AsyncStorage.setItem(HADITH_PROMPT_ASKED_KEY, '1');
 }
 
+/**
+ * First-launch boot preload. If Quran finishes within ~10s, stay on boot screen.
+ * Otherwise send the user to Home and finish the download in the background.
+ */
 export async function runBootPreloadOnce(
   onQuranProgress?: (p: QuranDownloadProgress) => void
-) {
-  // Quran preload is required for first-launch completion.
-  await retryQuranPreload(onQuranProgress);
+): Promise<BootPreloadResult> {
+  let quranFinished = false;
 
-  // Keep these non-blocking so first launch doesn't fail for optional assets.
-  await Promise.allSettled([
-    preloadNamesTextData(),
-    warmupUiAssets(),
+  const quranWork = retryQuranPreload(onQuranProgress)
+    .then(() => {
+      quranFinished = true;
+    })
+    .catch((error) => {
+      throw error;
+    });
+
+  await Promise.race([
+    quranWork.catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, BOOT_QURAN_BUDGET_MS)),
   ]);
 
-  await AsyncStorage.setItem(BOOT_PRELOAD_DONE_KEY, '1');
+  if (quranFinished) {
+    await finishOptionalBootAssets();
+    await markBootFlowComplete();
+    return 'completed_on_boot';
+  }
+
+  await markBootFlowComplete();
+
+  quranWork
+    .then(async () => finishOptionalBootAssets())
+    .catch(() => continueBootPreloadInBackground());
+
+  return 'continued_in_background';
 }
-
-

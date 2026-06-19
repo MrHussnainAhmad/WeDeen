@@ -21,8 +21,15 @@ export function FadeInView({
   style?: StyleProp<ViewStyle>;
 }) {
   const progress = useRef(new Animated.Value(0)).current;
+  const didAnimate = useRef(false);
 
   useEffect(() => {
+    if (didAnimate.current) {
+      progress.setValue(1);
+      return;
+    }
+    didAnimate.current = true;
+
     const t = Animated.timing(progress, {
       toValue: 1,
       duration,

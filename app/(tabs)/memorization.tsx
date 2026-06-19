@@ -374,7 +374,7 @@ export default function MemorizationScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: 16, paddingBottom: 110, gap: 16 },
+  container: { padding: 16, paddingBottom: 128, gap: 16 },
 
   loaderWrap: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loaderText: { color: colors.muted, fontWeight: '600' },

@@ -12,15 +12,7 @@ import { FadeInView, PressableScale } from '@/components/Anim';
 import { OrnateCard, SectionHeader } from '@/components/ui';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
-
-type SavedLocation = {
-  mode: 'coords' | 'city';
-  city: string;
-  country: string;
-  latitude?: number;
-  longitude?: number;
-  locked: boolean;
-};
+import { saveLocation, getSavedLocation, type SavedLocation } from '@/services/locationService';
 
 const LOCATION_KEY = 'timings_location_v1';
 const TIMINGS_CACHE_PREFIX = 'timings_cache_v1_';
@@ -76,20 +68,6 @@ function formatGregorianLabel(gregorian?: any) {
   const month = gregorian.month?.en ?? '';
   const year = gregorian.year ?? '';
   return `${day} ${month} ${year}`.trim();
-}
-
-async function getSavedLocation() {
-  const raw = await AsyncStorage.getItem(LOCATION_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as SavedLocation;
-  } catch {
-    return null;
-  }
-}
-
-async function saveLocation(loc: SavedLocation) {
-  await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(loc));
 }
 
 function getLocationCacheKey(loc: SavedLocation) {
@@ -621,7 +599,7 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     gap: 16,
-    paddingBottom: 110,
+    paddingBottom: 128,
   },
 
   // Hero

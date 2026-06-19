@@ -2,10 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 import { EightPointStar, GeometricDivider } from '@/components/IslamicMotifs';
@@ -15,14 +15,28 @@ import {
   runBootPreloadOnce,
   shouldAskHadithPredownload,
   shouldRunBootPreload,
+  continueBootPreloadInBackground,
 } from '@/services/bootPreloadService';
 import { cacheAllBooksInBackground } from '@/services/hadithService';
 import type { QuranDownloadProgress } from '@/services/quranService';
-import { handleAdhanAction, schedulePrayerAdhan } from '@/services/prayerNotificationService';
+import { warmQuranCacheInBackground } from '@/services/quranService';
+import {
+  dismissStaleAdhanAlerts,
+  handleAdhanAction,
+  isAdhanNotificationStale,
+  schedulePrayerAdhan,
+  shouldProcessAdhanAlert,
+} from '@/services/prayerNotificationService';
 import { ringAdhan } from '@/services/adhanController';
 import { maybeRefreshLocation } from '@/services/locationService';
 import { ensureBackgroundLocationRegistered } from '@/services/backgroundLocation';
 import { AdhanAlarmModal } from '@/components/AdhanAlarmModal';
+import { subscribePrayerFocus, refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
+import { syncMemorizationQueue } from '@/services/memorizationService';
+
+function openPrayerLockTab() {
+  router.push('/(tabs)/prayer-lock' as any);
+}
 
 const SAVED_LOCATION_KEY = 'timings_location_v1';
 
@@ -61,6 +75,7 @@ function formatSpeed(bytesPerSecond?: number) {
 
 export default function RootLayout() {
   const hydrate = useAuthStore((s) => s.hydrate);
+  const token = useAuthStore((s) => s.token);
   const [bootDone, setBootDone] = useState(false);
   // null = still deciding; true = first launch (show boot screen); false = repeat
   // launch (skip boot screen entirely).
@@ -82,6 +97,30 @@ export default function RootLayout() {
     hydrate();
   }, [hydrate]);
 
+  // Single app-level Salah Focus tick (shared with Prayer Lock tab).
+  useEffect(() => {
+    return subscribePrayerFocus((_state, { navigateToLock }) => {
+      if (navigateToLock) openPrayerLockTab();
+    });
+  }, []);
+
+  // Sync offline memorization marks when the app returns to the foreground.
+  useEffect(() => {
+    if (!token) return;
+    syncMemorizationQueue(token).catch(() => undefined);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncMemorizationQueue(token).catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, [token]);
+
+  // Finish Quran download quietly if a prior launch sent the user home early.
+  useEffect(() => {
+    if (!bootDone) return;
+    warmQuranCacheInBackground().catch(() => undefined);
+    continueBootPreloadInBackground().catch(() => undefined);
+  }, [bootDone]);
+
   useEffect(() => {
     // Scheduled notifications + custom sounds don't work in Expo Go.
     if (Constants.appOwnership === 'expo') return;
@@ -94,6 +133,7 @@ export default function RootLayout() {
     // which tab the user visits.
     const scheduleAdhans = async () => {
       try {
+        await dismissStaleAdhanAlerts();
         const raw = await AsyncStorage.getItem(SAVED_LOCATION_KEY);
         if (!raw) return;
         await schedulePrayerAdhan(JSON.parse(raw));
@@ -106,16 +146,34 @@ export default function RootLayout() {
       const Notifications = await import('expo-notifications');
       if (!mounted) return;
 
+      // Purge backlog before handlers run so opening the app after days away
+      // doesn't replay every missed adhan at once.
+      await dismissStaleAdhanAlerts();
+      await scheduleAdhans();
+
       Notifications.setNotificationHandler({
         handleNotification: async (notification) => {
-          const data = notification.request.content.data;
+          const data = notification.request.content.data as Record<string, unknown>;
           const isAdhan = data?.type === 'adhan';
           if (isAdhan) {
-            // App is in the foreground: show ONLY the full-screen in-app alarm
-            // (with Stop/Snooze) and play the full adhan. Suppress the OS
-            // banner/list/sound so the user gets a single alert, not a duplicate
-            // notification in the bar alongside the modal.
+            const ok = await shouldProcessAdhanAlert(data, notification.date);
+            if (!ok) {
+              await Notifications.dismissNotificationAsync(notification.request.identifier).catch(
+                () => undefined
+              );
+              return {
+                shouldShowBanner: false,
+                shouldShowList: false,
+                shouldPlaySound: false,
+                shouldSetBadge: false,
+              };
+            }
             ringAdhan(String(data?.prayer ?? 'Prayer')).catch(() => undefined);
+            refreshPrayerFocusNow(false)
+              .then((focus) => {
+                if (focus?.isLockActive) openPrayerLockTab();
+              })
+              .catch(() => undefined);
             return {
               shouldShowBanner: false,
               shouldShowList: false,
@@ -123,7 +181,6 @@ export default function RootLayout() {
               shouldSetBadge: false,
             };
           }
-          // Non-adhan notifications behave normally.
           return {
             shouldShowBanner: true,
             shouldShowList: true,
@@ -133,25 +190,35 @@ export default function RootLayout() {
         },
       });
 
-      // Snooze/Stop notification actions (and a plain tap) on an adhan
-      // notification delivered while backgrounded/closed.
-      responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data;
-        if (data?.type === 'adhan') {
-          handleAdhanAction(response.actionIdentifier, String(data?.prayer ?? 'Prayer')).catch(
-            () => undefined
-          );
-        }
-      });
-      const last = await Notifications.getLastNotificationResponseAsync();
-      const lastData = last?.notification.request.content.data;
-      if (last && lastData?.type === 'adhan') {
-        handleAdhanAction(last.actionIdentifier, String(lastData?.prayer ?? 'Prayer')).catch(
+      Notifications.addNotificationReceivedListener((notification) => {
+        const data = notification.request.content.data as Record<string, unknown>;
+        if (data?.type !== 'adhan') return;
+        if (!isAdhanNotificationStale(data, Date.now(), notification.date)) return;
+        Notifications.dismissNotificationAsync(notification.request.identifier).catch(
           () => undefined
         );
-      }
+      });
 
-      await scheduleAdhans();
+      responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as Record<string, unknown>;
+        if (data?.type === 'adhan') {
+          handleAdhanAction(
+            response.actionIdentifier,
+            String(data?.prayer ?? 'Prayer'),
+            data
+          ).catch(() => undefined);
+        }
+      });
+
+      const last = await Notifications.getLastNotificationResponseAsync();
+      const lastData = last?.notification.request.content.data as Record<string, unknown> | undefined;
+      if (last && lastData?.type === 'adhan') {
+        handleAdhanAction(
+          last.actionIdentifier,
+          String(lastData?.prayer ?? 'Prayer'),
+          lastData
+        ).catch(() => undefined);
+      }
     })().catch(() => undefined);
 
     const appStateSub = AppState.addEventListener('change', (state) => {
@@ -246,9 +313,21 @@ export default function RootLayout() {
 
       if (shouldRun) {
         try {
-          await runBootPreloadOnce((p) => {
+          const result = await runBootPreloadOnce((p) => {
             if (mounted) setQuranProgress(p);
           });
+          if (!mounted) return;
+
+          if (result === 'continued_in_background') {
+            if (ask) {
+              setShowHadithPrompt(true);
+              setNeedsBoot(false);
+              setBootDone(true);
+              return;
+            }
+            fadeToHome();
+            return;
+          }
         } catch {
           // Non-blocking: let app continue even if a preload step fails.
         }
@@ -361,25 +440,33 @@ export default function RootLayout() {
           headerTitleStyle: { fontFamily: 'NotoSerif', fontWeight: '700', fontSize: 18 },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.bg },
-          // Smooth horizontal slide on both platforms (iOS keeps its native parallax),
-          // which pairs naturally with the swipe-back gesture below.
-          animation: Platform.OS === 'ios' ? 'default' : 'slide_from_right',
+          animation: 'slide_from_right',
           animationDuration: 280,
           gestureEnabled: true,
           gestureDirection: 'horizontal',
+          animationMatchesGesture: true,
+          fullScreenGestureEnabled: true,
+          freezeOnBlur: true,
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="quran/index" options={{ title: 'Quran Surahs' }} />
-        <Stack.Screen name="quran/[surah]" options={{ headerShown: false }} />
+        <Stack.Screen name="quran/[surah]" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="hadith/index" options={{ title: 'Hadith Books' }} />
         <Stack.Screen name="hadith/[book]/index" options={{ title: 'Hadith' }} />
         <Stack.Screen name="hadith/[book]/[section]" options={{ title: 'Hadith' }} />
         <Stack.Screen name="qibla" options={{ title: 'Qibla Compass' }} />
         <Stack.Screen name="names/[type]" options={{ title: '99 Names' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="salah-focus" options={{ title: 'Prayer Lock Setup' }} />
+        <Stack.Screen name="blocked" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
       </Stack>
       <AdhanAlarmModal />
+      <HadithPredownloadPrompt
+        visible={showHadithPrompt}
+        onYes={handleHadithYes}
+        onNo={handleHadithNo}
+      />
     </QueryClientProvider>
     </View>
   );
@@ -388,6 +475,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+    backgroundColor: colors.bg,
   },
   bootScreen: {
     flex: 1,

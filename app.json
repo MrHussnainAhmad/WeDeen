@@ -19,6 +19,7 @@
       },
       "package": "com.hussnainahmadsahi.wedeen",
       "versionCode": 2,
+      "backgroundColor": "#F6F1E7",
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
       ]
@@ -29,11 +30,25 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "ios": {
-      "supportsTablet": true
-    },
     "plugins": [
       "expo-router",
+      [
+        "expo-app-blocker",
+        {
+          "android": {
+            "scheme": "wedeen",
+            "overlayTitle": "WeDeen",
+            "overlayText": "Salah is calling…",
+            "overlayBackgroundColor": "#0F3D2E",
+            "overlayTitleColor": "#FFFFFF",
+            "overlayTextColor": "rgba(255,255,255,0.88)",
+            "overlay": {
+              "icon": "./assets/images/logo.png"
+            }
+          }
+        }
+      ],
+      "./plugins/withWedeenPrayerLockAndroid.js",
       [
         "expo-notifications",
         {

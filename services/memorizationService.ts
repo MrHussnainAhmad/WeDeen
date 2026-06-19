@@ -34,12 +34,34 @@ export async function queueMemorization(item: MemorizationItem) {
 
 export async function flushQueue(token: string) {
   const raw = await AsyncStorage.getItem(OFFLINE_QUEUE);
-  if (!raw) return;
+  if (!raw) return 0;
   const queue = JSON.parse(raw) as MemorizationItem[];
+  const remaining: MemorizationItem[] = [];
+
   for (const item of queue) {
-    await markMemorized(token, item);
+    try {
+      await markMemorized(token, item);
+    } catch {
+      remaining.push(item);
+    }
   }
-  await AsyncStorage.removeItem(OFFLINE_QUEUE);
+
+  if (remaining.length) {
+    await AsyncStorage.setItem(OFFLINE_QUEUE, JSON.stringify(remaining));
+  } else {
+    await AsyncStorage.removeItem(OFFLINE_QUEUE);
+  }
+
+  return queue.length - remaining.length;
+}
+
+export async function syncMemorizationQueue(token: string | null | undefined) {
+  if (!token) return 0;
+  try {
+    return await flushQueue(token);
+  } catch {
+    return 0;
+  }
 }
 
 export async function fetchLearningProgress(token: string) {
