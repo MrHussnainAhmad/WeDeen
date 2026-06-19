@@ -11,11 +11,9 @@ export default function TabsLayout() {
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          // Mount tabs on first visit — Home loads first; others stay idle until opened.
           lazy: true,
-          // No cross-fade/shift — overlapping scenes showed the previous tab as a
-          // dark ghost over Android's default black window background.
-          animation: 'none',
+          animation: 'fade',
+          animationDuration: 180,
           sceneStyle: { backgroundColor: colors.bg },
         }}
       >

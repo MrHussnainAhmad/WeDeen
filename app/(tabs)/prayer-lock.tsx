@@ -253,7 +253,7 @@ export default function PrayerLockScreen() {
             )}
           </PressableScale>
           <Text style={styles.prayedFootnote}>
-            Apps stay blocked until you tap this — even after the prayer window ends.
+            Apps unlock automatically when the prayer window ends, or tap above when you have prayed.
           </Text>
         </FadeInView>
       ) : null}

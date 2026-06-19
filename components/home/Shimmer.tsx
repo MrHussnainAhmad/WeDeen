@@ -65,7 +65,7 @@ export function Shimmer({
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.bgDeep,
+    backgroundColor: colors.cardAlt,
     overflow: 'hidden',
   },
   highlight: {
@@ -73,6 +73,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 90,
-    backgroundColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.75)',
   },
 });

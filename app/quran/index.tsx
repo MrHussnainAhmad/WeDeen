@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getOrDownloadQuran } from '@/services/quranService';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar } from '@/components/IslamicMotifs';
+import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { FadeInView, PressableScale } from '@/components/Anim';
 
 export default function QuranListScreen() {
@@ -16,13 +17,7 @@ export default function QuranListScreen() {
   });
 
   if (isLoading) {
-    return (
-      <View style={[styles.skeletonWrap, { paddingTop: 14 }]}>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <View key={i} style={styles.skeletonRow} />
-        ))}
-      </View>
-    );
+    return <ListRowSkeleton rows={6} rowHeight={76} />;
   }
 
   const surahs = data?.surahs ?? [];
@@ -93,17 +88,6 @@ export default function QuranListScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  skeletonWrap: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  skeletonRow: {
-    height: 76,
-    borderRadius: radius.lg,
-    backgroundColor: colors.bgDeep,
-  },
   center: {
     flex: 1,
     backgroundColor: colors.bg,

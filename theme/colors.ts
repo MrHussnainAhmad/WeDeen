@@ -4,7 +4,7 @@
 export const colors = {
   // Surfaces
   bg: '#F6F1E7',          // warm ivory "paper"
-  bgDeep: '#EFE7D6',      // slightly deeper paper for contrast bands
+  bgDeep: '#F3EDE2',      // skeleton / placeholder wash (warm, not dark)
   card: '#FFFFFF',
   cardAlt: '#FBF7EE',     // cream card for nested blocks
 

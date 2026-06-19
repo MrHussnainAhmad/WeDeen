@@ -9,6 +9,7 @@ import {
   emergencyUnlockSalahFocus,
   evaluateSalahFocus,
   markSalahFocusPrayerComplete,
+  stopTestPrayerLock,
 } from '@/services/salahFocusService';
 import { refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
 import {
@@ -19,21 +20,25 @@ import {
 import {
   configureSalahFocusOverlay,
   launchAndroidPackage,
-  relockSalahFocusApps,
 } from '@/services/salahFocusNative';
 import type { PrayerLabel } from '@/services/prayerTimingUtils';
 
-/** Deep link: wedeen://blocked?app=Instagram&package=... — random roast + unlock flow. */
+/** Deep link from native overlay buttons: wedeen://blocked?action=prayed|emergency */
 export default function BlockedDeepLinkScreen() {
-  const params = useLocalSearchParams<{ app?: string; package?: string }>();
+  const params = useLocalSearchParams<{
+    app?: string;
+    package?: string;
+    action?: string;
+  }>();
   const appFromLink = typeof params.app === 'string' ? params.app : undefined;
   const packageFromLink = typeof params.package === 'string' ? params.package : undefined;
+  const actionFromLink = typeof params.action === 'string' ? params.action : undefined;
 
   const [blockedAppName, setBlockedAppName] = useState<string | undefined>(appFromLink);
   const [dialogue, setDialogue] = useState('');
   const [activePrayer, setActivePrayer] = useState<PrayerLabel | null>(null);
   const [lockActive, setLockActive] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!actionFromLink);
   const [submitting, setSubmitting] = useState(false);
   const [emergencySubmitting, setEmergencySubmitting] = useState(false);
 
@@ -42,13 +47,12 @@ export default function BlockedDeepLinkScreen() {
     [packageFromLink, blockedAppName]
   );
 
-  const refreshLockState = useCallback(async () => {
-    await relockSalahFocusApps().catch(() => undefined);
-    const state = await evaluateSalahFocus();
-    setActivePrayer(state.activePrayer);
-    setLockActive(state.isLockActive);
-    return state;
-  }, []);
+  const finishAndLeave = useCallback(() => {
+    if (packageFromLink && actionFromLink === 'emergency') {
+      launchAndroidPackage(packageFromLink);
+    }
+    BackHandler.exitApp();
+  }, [packageFromLink, actionFromLink]);
 
   useEffect(() => {
     let mounted = true;
@@ -62,10 +66,42 @@ export default function BlockedDeepLinkScreen() {
       setDialogue(formatPrayerLockDialogue(template, resolvedName));
       configureSalahFocusOverlay(template);
 
-      const state = await refreshLockState();
+      const state = await evaluateSalahFocus();
       if (!mounted) return;
 
-      if (!state.isLockActive) {
+      setActivePrayer(state.activePrayer);
+      setLockActive(state.isLockActive || state.isTestLock);
+
+      if (actionFromLink === 'prayed') {
+        setSubmitting(true);
+        try {
+          if (state.activePrayer) {
+            await markSalahFocusPrayerComplete(state.activePrayer);
+          } else if (state.isTestLock) {
+            await stopTestPrayerLock();
+          }
+          await refreshPrayerFocusNow(false);
+        } finally {
+          if (mounted) finishAndLeave();
+        }
+        return;
+      }
+
+      if (actionFromLink === 'emergency' && packageFromLink) {
+        setEmergencySubmitting(true);
+        try {
+          const result = await emergencyUnlockSalahFocus(packageFromLink, resolvedName);
+          if (result.ok) {
+            await refreshPrayerFocusNow(false);
+            if (mounted) finishAndLeave();
+            return;
+          }
+        } finally {
+          if (mounted) setEmergencySubmitting(false);
+        }
+      }
+
+      if (!state.isLockActive && !state.isTestLock) {
         router.replace('/(tabs)/prayer-lock' as any);
         return;
       }
@@ -78,7 +114,7 @@ export default function BlockedDeepLinkScreen() {
     return () => {
       mounted = false;
     };
-  }, [appFromLink, packageFromLink, refreshLockState]);
+  }, [appFromLink, packageFromLink, actionFromLink, finishAndLeave]);
 
   useEffect(() => {
     if (!lockActive) return;
@@ -90,15 +126,13 @@ export default function BlockedDeepLinkScreen() {
     if (!activePrayer || submitting || !lockActive) return;
     setSubmitting(true);
     try {
-      const next = await markSalahFocusPrayerComplete(activePrayer);
-      if (!next.isLockActive) {
-        await refreshPrayerFocusNow(false);
-        router.replace('/(tabs)/prayer-lock' as any);
-      }
+      await markSalahFocusPrayerComplete(activePrayer);
+      await refreshPrayerFocusNow(false);
+      finishAndLeave();
     } finally {
       setSubmitting(false);
     }
-  }, [activePrayer, submitting, lockActive]);
+  }, [activePrayer, submitting, lockActive, finishAndLeave]);
 
   const onEmergencyUnlock = useCallback(async () => {
     if (!packageFromLink || !emergencyAllowed || emergencySubmitting || submitting || !lockActive) {
@@ -109,10 +143,8 @@ export default function BlockedDeepLinkScreen() {
     try {
       const result = await emergencyUnlockSalahFocus(packageFromLink, blockedAppName);
       if (!result.ok) return;
-
       await refreshPrayerFocusNow(false);
-      launchAndroidPackage(packageFromLink);
-      router.back();
+      finishAndLeave();
     } finally {
       setEmergencySubmitting(false);
     }
@@ -123,9 +155,10 @@ export default function BlockedDeepLinkScreen() {
     emergencySubmitting,
     submitting,
     lockActive,
+    finishAndLeave,
   ]);
 
-  if (loading) {
+  if (loading || actionFromLink) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryDeep }}>
         <ActivityIndicator color={colors.gold} size="large" />

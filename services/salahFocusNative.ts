@@ -97,8 +97,8 @@ export function configureSalahFocusOverlay(message?: string) {
       overlayTextFontSize: 15,
       overlayShowSpinner: false,
       overlaySpinnerColor: '#C59B27',
-      notificationTitle: 'Prayer Lock active',
-      notificationText: '{appName} is paused — tap to pray and unlock.',
+      notificationTitle: '',
+      notificationText: '',
     });
   } catch {
     // non-fatal

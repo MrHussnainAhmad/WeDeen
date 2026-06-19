@@ -81,11 +81,9 @@ const styles = StyleSheet.create({
   container: { padding: 16, gap: 18, backgroundColor: colors.bg },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   hero: {
-    backgroundColor: colors.bgDeep,
+    backgroundColor: colors.cardAlt,
     borderRadius: radius.xl,
     padding: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   timelineRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 22 },
@@ -95,8 +93,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 });

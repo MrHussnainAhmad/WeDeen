@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getHadithSection, type HadithItem } from '@/services/hadithService';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar } from '@/components/IslamicMotifs';
+import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { PressableScale } from '@/components/Anim';
 
 /**
@@ -32,13 +33,7 @@ export function HadithList({ slug, section }: { slug: string; section: string })
   }
 
   if (isLoading) {
-    return (
-      <View style={styles.skeletonWrap}>
-        {[0, 1, 2, 3].map((i) => (
-          <View key={i} style={styles.skeletonRow} />
-        ))}
-      </View>
-    );
+    return <ListRowSkeleton rows={4} rowHeight={130} />;
   }
 
   if (isError) {
@@ -126,7 +121,6 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 14, paddingTop: 14 },
 
   skeletonWrap: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 14, paddingTop: 14, gap: 12 },
-  skeletonRow: { height: 130, borderRadius: radius.lg, backgroundColor: colors.bgDeep },
 
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   errorIcon: {

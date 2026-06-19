@@ -122,6 +122,7 @@ export async function getPrayerWindowsForDay(
   return windows;
 }
 
+/** Prayer window that contains `now` (adhan → adhan + windowMinutes). */
 export async function getActivePrayerWindow(
   loc: PrayerLocation,
   now: Date,

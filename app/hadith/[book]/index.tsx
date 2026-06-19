@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { cacheBook, getHadithChapters, type HadithChapter } from '@/services/hadithService';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { HadithList } from '@/components/hadith/HadithList';
 
@@ -39,11 +40,7 @@ export default function HadithBookScreen() {
       <Stack.Screen options={{ title: headerTitle }} />
 
       {isLoading ? (
-        <View style={styles.skeletonWrap}>
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <View key={i} style={styles.skeletonRow} />
-          ))}
-        </View>
+        <ListRowSkeleton rows={6} rowHeight={64} />
       ) : isError ? (
         <View style={styles.center}>
           <View style={styles.errorIcon}>
@@ -110,7 +107,6 @@ export default function HadithBookScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   skeletonWrap: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 14, paddingTop: 14, gap: 12 },
-  skeletonRow: { height: 64, borderRadius: radius.lg, backgroundColor: colors.bgDeep },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   errorIcon: {
     width: 64,

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import {
-  getOutstandingPrayerLock,
+  getActivePrayerWindow,
   gregorianKey,
   isPrayerLocationConfigured,
   type PrayerLabel,
@@ -336,11 +336,10 @@ export async function evaluateSalahFocus(now = new Date()): Promise<SalahFocusRu
     };
   }
 
-  const outstanding = await getOutstandingPrayerLock(
+  const outstanding = await getActivePrayerWindow(
     location,
     now,
-    config.windowMinutes,
-    completedToday
+    config.windowMinutes
   );
   if (!outstanding) {
     await deactivateBlocking();
@@ -379,14 +378,9 @@ export async function markSalahFocusPrayerComplete(prayer: PrayerLabel) {
     return evaluateSalahFocus(now);
   }
 
-  const outstanding = await getOutstandingPrayerLock(
-    location,
-    now,
-    config.windowMinutes,
-    completedToday
-  );
+  const active = await getActivePrayerWindow(location, now, config.windowMinutes);
 
-  if (!outstanding || outstanding.label !== prayer) {
+  if (!active || active.label !== prayer) {
     return evaluateSalahFocus(now);
   }
 
@@ -399,7 +393,6 @@ export async function markSalahFocusPrayerComplete(prayer: PrayerLabel) {
   });
 
   await clearEmergencyUnlockState();
-  await relockSalahFocusApps().catch(() => undefined);
   await deactivateBlocking();
   return evaluateSalahFocus(now);
 }

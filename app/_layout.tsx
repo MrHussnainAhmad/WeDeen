@@ -98,11 +98,9 @@ export default function RootLayout() {
     hydrate();
   }, [hydrate]);
 
-  // Single app-level Salah Focus tick (shared with Prayer Lock tab).
+  // Prayer-focus coordinator runs in the background; do not auto-open the tab.
   useEffect(() => {
-    return subscribePrayerFocus((_state, { navigateToLock }) => {
-      if (navigateToLock) openPrayerLockTab();
-    });
+    return subscribePrayerFocus(() => undefined);
   }, []);
 
   // Sync offline memorization marks when the app returns to the foreground.

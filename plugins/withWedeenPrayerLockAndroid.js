@@ -7,6 +7,7 @@
 const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const SERVICE = 'expo.modules.appblocker.AppBlockerService';
 const FGS_SUBTYPE =
@@ -96,6 +97,16 @@ function withWedeenPrayerLockAndroid(config) {
         }
         fs.copyFileSync(iconSrc, iconDest);
       }
+
+      try {
+        execFileSync(process.execPath, [path.join(projectRoot, 'scripts', 'patch-prayer-lock-native.js')], {
+          cwd: projectRoot,
+          stdio: 'inherit',
+        });
+      } catch (e) {
+        console.warn('[withWedeenPrayerLockAndroid] Native patch step failed:', e.message);
+      }
+
       return config;
     },
   ]);

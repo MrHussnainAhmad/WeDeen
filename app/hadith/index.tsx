@@ -12,6 +12,7 @@ import {
 } from '@/services/hadithService';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar } from '@/components/IslamicMotifs';
+import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { FadeInView, PressableScale } from '@/components/Anim';
 
 type DownloadState = 'idle' | 'running' | 'done';
@@ -56,13 +57,7 @@ export default function HadithBooksScreen() {
   };
 
   if (isLoading) {
-    return (
-      <View style={styles.skeletonWrap}>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <View key={i} style={styles.skeletonRow} />
-        ))}
-      </View>
-    );
+    return <ListRowSkeleton rows={6} rowHeight={76} />;
   }
 
   if (isError) {
@@ -151,7 +146,6 @@ export default function HadithBooksScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   skeletonWrap: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 14, paddingTop: 14, gap: 12 },
-  skeletonRow: { height: 76, borderRadius: radius.lg, backgroundColor: colors.bgDeep },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   errorIcon: {
     width: 64,

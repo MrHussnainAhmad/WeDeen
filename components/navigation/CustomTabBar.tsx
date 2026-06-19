@@ -32,6 +32,54 @@ const TAB_SPECS: TabSpec[] = [
   { routeName: 'profile', label: 'Profile', icon: 'person-outline', iconFocused: 'person' },
 ];
 
+function SideTabButton({
+  focused,
+  icon,
+  iconFocused,
+  label,
+  onPress,
+}: {
+  focused: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconFocused: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  const focusAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(focusAnim, {
+      toValue: focused ? 1 : 0,
+      duration: 220,
+      useNativeDriver: false,
+    }).start();
+  }, [focused, focusAnim]);
+
+  const bg = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', colors.primarySoft],
+  });
+  const color = focused ? colors.primary : '#93A39B';
+
+  return (
+    <PressableScale
+      onPress={onPress}
+      pressedScale={0.92}
+      style={styles.sideSlot}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={label}
+    >
+      <Animated.View style={[styles.sideIconWrap, { backgroundColor: bg }]}>
+        <Ionicons name={focused ? iconFocused : icon} size={20} color={color} />
+      </Animated.View>
+      <Text style={[styles.sideLabel, focused && styles.labelFocused]} numberOfLines={1}>
+        {label}
+      </Text>
+    </PressableScale>
+  );
+}
+
 function CenterTabButton({
   focused,
   icon,
@@ -90,7 +138,6 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
           const route = state.routes[routeIndex];
           const focused = state.index === routeIndex;
-          const color = focused ? colors.primary : '#93A39B';
 
           const onPress = () => {
             const event = navigation.emit({
@@ -117,22 +164,14 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           }
 
           return (
-            <PressableScale
+            <SideTabButton
               key={spec.routeName}
+              focused={focused}
+              icon={spec.icon}
+              iconFocused={spec.iconFocused}
+              label={spec.label}
               onPress={onPress}
-              pressedScale={0.92}
-              style={styles.sideSlot}
-              accessibilityRole="button"
-              accessibilityState={{ selected: focused }}
-              accessibilityLabel={spec.label}
-            >
-              <View style={[styles.sideIconWrap, focused && styles.sideIconWrapFocused]}>
-                <Ionicons name={focused ? spec.iconFocused : spec.icon} size={20} color={color} />
-              </View>
-              <Text style={[styles.sideLabel, focused && styles.labelFocused]} numberOfLines={1}>
-                {spec.label}
-              </Text>
-            </PressableScale>
+            />
           );
         })}
       </View>
@@ -178,7 +217,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sideIconWrapFocused: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: 'transparent',
   },
   sideLabel: {
     marginTop: 2,
