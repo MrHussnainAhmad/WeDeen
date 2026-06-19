@@ -7,6 +7,7 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar } from '@/components/IslamicMotifs';
 import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { PressableScale } from '@/components/Anim';
+import { useResponsive } from '@/theme/responsive';
 
 /**
  * Shared bilingual hadith reader. Used both by the dedicated section screen and
@@ -14,6 +15,7 @@ import { PressableScale } from '@/components/Anim';
  */
 export function HadithList({ slug, section }: { slug: string; section: string }) {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['hadith-section', slug, section],
     queryFn: () => getHadithSection(slug, section),
@@ -71,7 +73,7 @@ export function HadithList({ slug, section }: { slug: string; section: string })
       windowSize={7}
       removeClippedSubviews
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 28 }]}
+      contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 28 }, responsive.centerContent]}
       renderItem={({ item }) => <HadithCard item={item} />}
     />
   );

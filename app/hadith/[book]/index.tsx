@@ -8,10 +8,12 @@ import { cacheBook, getHadithChapters, type HadithChapter } from '@/services/had
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { FadeInView, PressableScale } from '@/components/Anim';
+import { useResponsive } from '@/theme/responsive';
 import { HadithList } from '@/components/hadith/HadithList';
 
 export default function HadithBookScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const { book, name } = useLocalSearchParams<{ book: string; name?: string }>();
 
   const { data, error, isLoading, isError, refetch } = useQuery({
@@ -91,7 +93,7 @@ export default function HadithBookScreen() {
               </Link>
             </FadeInView>
           )}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
           showsVerticalScrollIndicator={false}
           initialNumToRender={14}
           maxToRenderPerBatch={12}

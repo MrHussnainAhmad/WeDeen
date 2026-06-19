@@ -19,10 +19,12 @@ import { VerseCard } from '@/components/home/VerseCard';
 import { HadithCard } from '@/components/home/HadithCard';
 import { AzkarRail } from '@/components/home/AzkarRail';
 import { HomeSkeleton } from '@/components/home/HomeSkeleton';
+import { useResponsive } from '@/theme/responsive';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Math.max(insets.top + 12, 22);
+  const responsive = useResponsive();
 
   const { data, isLoading, isError, refetch, isFetching } = useDailyIslamicData();
   const user = useAuthStore((s) => s.user);
@@ -69,7 +71,7 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: topPad }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
       scrollEventThrottle={16}
       refreshControl={

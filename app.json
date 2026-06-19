@@ -12,6 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#F8F5EF"
     },
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -57,7 +60,7 @@
             "overlayTitleColor": "#FFFFFF",
             "overlayTextColor": "rgba(255,255,255,0.88)",
             "overlay": {
-              "icon": "./assets/images/logo.png"
+              "icon": "./assets/images/logo-mark.png"
             }
           }
         }

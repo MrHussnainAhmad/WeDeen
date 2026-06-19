@@ -1,39 +1,31 @@
 import { Image, StyleProp, View, ViewStyle } from 'react-native';
 
-/** Logo artwork is tall/narrow; widen slightly so it reads balanced on splash screens. */
-const WIDTH_SCALE = 1.48;
+const LOGO = require('@/assets/images/logo-mark.png');
+
+// Resolve the asset's real pixel size once so the logo always renders at its
+// true aspect ratio — never stretched — and stays identical on every screen.
+const source = Image.resolveAssetSource(LOGO);
+const ASPECT = source && source.height ? source.width / source.height : 0.516;
 
 type Props = {
-  /** Visual height of the logo (width follows aspect + scale). */
+  /** Visual height of the logo; width follows the artwork's true aspect ratio. */
   height?: number;
+  /** Optional cap so the logo never overflows on small/large screens. */
+  maxWidth?: number;
   style?: StyleProp<ViewStyle>;
 };
 
-export function AppLogo({ height = 140, style }: Props) {
-  const baseWidth = height * 0.92;
-  const layoutWidth = baseWidth * WIDTH_SCALE;
+export function AppLogo({ height = 140, maxWidth, style }: Props) {
+  let h = height;
+  let w = h * ASPECT;
+  if (maxWidth && w > maxWidth) {
+    w = maxWidth;
+    h = w / ASPECT;
+  }
 
   return (
-    <View
-      style={[
-        {
-          width: layoutWidth,
-          height,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        style,
-      ]}
-    >
-      <Image
-        source={require('@/assets/images/logo.png')}
-        style={{
-          width: baseWidth,
-          height,
-          transform: [{ scaleX: WIDTH_SCALE }],
-        }}
-        resizeMode="contain"
-      />
+    <View style={[{ width: w, height: h }, style]}>
+      <Image source={LOGO} style={{ width: w, height: h }} resizeMode="contain" />
     </View>
   );
 }

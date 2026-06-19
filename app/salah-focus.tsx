@@ -19,6 +19,7 @@ import { FadeInView, PressableScale } from '@/components/Anim';
 import { AppListIcon } from '@/components/AppListIcon';
 import { SalahFocusPermissionsCard } from '@/components/SalahFocusPermissionsCard';
 import { OrnateCard, SectionHeader } from '@/components/ui';
+import { useResponsive } from '@/theme/responsive';
 import {
   getSalahFocusConfig,
   getSalahFocusExpoGoMessage,
@@ -51,6 +52,7 @@ const POPULAR_PACKAGES = [
 
 export default function SalahFocusScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const supported = isSalahFocusSupported();
 
   const [loading, setLoading] = useState(true);
@@ -221,7 +223,7 @@ export default function SalahFocusScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
+      contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
       keyboardShouldPersistTaps="handled"
     >
       <OrnateCard index={0}>

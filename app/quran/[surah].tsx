@@ -27,11 +27,13 @@ import {
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
 import { PressableScale } from '@/components/Anim';
+import { useResponsive } from '@/theme/responsive';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 
 export default function SurahDetailScreen() {
   const { surah } = useLocalSearchParams<{ surah: string }>();
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const surahNumber = Number(surah);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -381,7 +383,7 @@ export default function SurahDetailScreen() {
             </View>
           ) : null
         }
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
         renderItem={({ item }: any) => (
           <View style={styles.ayahCard}>
             <View style={styles.ayahRow}>

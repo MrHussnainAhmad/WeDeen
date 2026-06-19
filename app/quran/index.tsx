@@ -8,9 +8,11 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar } from '@/components/IslamicMotifs';
 import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { FadeInView, PressableScale } from '@/components/Anim';
+import { useResponsive } from '@/theme/responsive';
 
 export default function QuranListScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const { data, error, isLoading, isError, refetch } = useQuery({
     queryKey: ['quran-full'],
     queryFn: () => getOrDownloadQuran()
@@ -80,7 +82,7 @@ export default function QuranListScreen() {
           </FadeInView>
         );
       }}
-      contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+      contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     />
   );

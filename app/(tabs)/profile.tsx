@@ -10,11 +10,13 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark, MihrabArch } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { OrnateCard } from '@/components/ui';
+import { useResponsive } from '@/theme/responsive';
 
 type AuthMode = 'signin' | 'signup';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const [mode, setMode] = useState<AuthMode>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -69,6 +71,7 @@ export default function ProfileScreen() {
               paddingTop: Math.max(insets.top + 60, 80),
               paddingBottom: Math.max(insets.bottom + 120, 140),
             },
+            responsive.centerContent,
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -214,7 +217,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
       <FadeInView index={0}>

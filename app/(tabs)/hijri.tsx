@@ -10,6 +10,7 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { OrnateCard, SectionHeader } from '@/components/ui';
+import { useResponsive } from '@/theme/responsive';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
 import { saveLocation, getSavedLocation, type SavedLocation } from '@/services/locationService';
@@ -79,6 +80,7 @@ function getLocationCacheKey(loc: SavedLocation) {
 
 export default function TimingsScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const [locationLoading, setLocationLoading] = useState(true);
   const [location, setLocation] = useState<SavedLocation | null>(null);
   const [manualCity, setManualCity] = useState('');
@@ -361,7 +363,7 @@ export default function TimingsScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
       {/* ───── Next Prayer Hero ───── */}

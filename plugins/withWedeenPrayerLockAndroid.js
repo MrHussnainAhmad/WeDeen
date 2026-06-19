@@ -89,7 +89,7 @@ function withWedeenPrayerLockAndroid(config) {
         'res',
         'drawable'
       );
-      const iconSrc = path.join(projectRoot, 'assets', 'images', 'logo.png');
+      const iconSrc = path.join(projectRoot, 'assets', 'images', 'logo-mark.png');
       const iconDest = path.join(drawableDir, 'expo_app_blocker_overlay_icon.png');
       if (fs.existsSync(iconSrc)) {
         if (!fs.existsSync(drawableDir)) {

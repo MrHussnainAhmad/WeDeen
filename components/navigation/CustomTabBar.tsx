@@ -5,6 +5,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableScale } from '@/components/Anim';
 import { colors, shadow } from '@/theme/colors';
+import { TAB_BAR_MAX_WIDTH } from '@/theme/responsive';
 
 type TabSpec = {
   routeName: string;
@@ -131,7 +132,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[styles.wrap, { paddingBottom: bottomPad }]}>
-      <View style={styles.bar}>
+      <View style={[styles.bar, { maxWidth: TAB_BAR_MAX_WIDTH, alignSelf: 'center', width: '100%' }]}>
         {TAB_SPECS.map((spec) => {
           const routeIndex = state.routes.findIndex((r) => r.name === spec.routeName);
           if (routeIndex < 0) return null;
@@ -185,10 +186,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    paddingHorizontal: 10,
     backgroundColor: 'transparent',
   },
   bar: {
-    marginHorizontal: 10,
     height: 64,
     borderRadius: 22,
     backgroundColor: '#FFFFFF',

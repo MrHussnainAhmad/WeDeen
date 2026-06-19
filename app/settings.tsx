@@ -38,6 +38,7 @@ import { useAuthStore } from '@/store/authStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { GeometricDivider } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale } from '@/components/Anim';
+import { useResponsive } from '@/theme/responsive';
 import { OrnateCard, SectionHeader } from '@/components/ui';
 import {
   getUiPreferences,
@@ -68,6 +69,7 @@ async function openStoreListing() {
 const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
 
 export default function SettingsScreen() {
+  const responsive = useResponsive();
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
 
@@ -330,7 +332,7 @@ export default function SettingsScreen() {
     >
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, responsive.centerContent]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

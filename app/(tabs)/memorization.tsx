@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale, useBreathing } from '@/components/Anim';
+import { useResponsive } from '@/theme/responsive';
 import { Animated } from 'react-native';
 
 const TOTAL_SURAHS = 114;
@@ -35,6 +36,7 @@ const DECOR_ICONS = ['mosque', 'star-crescent', 'candelabra', 'candle', 'book-op
 
 export default function MemorizationScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const queryClient = useQueryClient();
   const token = useAuthStore((s) => s.token);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -138,7 +140,7 @@ export default function MemorizationScreen() {
     <ScrollView
       ref={scrollRef}
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
       {/* ───── Hero ───── */}

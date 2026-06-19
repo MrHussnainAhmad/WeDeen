@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
+import { useResponsive } from '@/theme/responsive';
 import { playManagedAudio, stopAllAudio } from '@/services/audioManager';
 import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
@@ -174,6 +175,7 @@ async function getCachedNames(type: 'allah' | 'muhammad'): Promise<NameItem[] | 
 }
 
 export default function NamesDetailScreen() {
+  const responsive = useResponsive();
   const { type } = useLocalSearchParams<{ type: string }>();
   const normalizedType = type === 'muhammad' ? 'muhammad' : 'allah';
   const title = normalizedType === 'allah' ? '99 Names of Allah' : '99 Names of Muhammad';
@@ -421,7 +423,7 @@ export default function NamesDetailScreen() {
       data={isLoading ? [] : names}
       keyExtractor={(item) => `${item.id}`}
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, responsive.centerContent]}
       removeClippedSubviews
       initialNumToRender={14}
       maxToRenderPerBatch={18}

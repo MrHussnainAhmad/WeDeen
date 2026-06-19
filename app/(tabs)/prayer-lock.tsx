@@ -36,6 +36,7 @@ import {
   type PrayerWindow,
 } from '@/services/prayerTimingUtils';
 import { pickRandomPrayerLockDialogue } from '@/services/prayerLockDialogues';
+import { useResponsive } from '@/theme/responsive';
 
 function formatCountdown(ms: number) {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -47,6 +48,7 @@ function formatCountdown(ms: number) {
 export default function PrayerLockScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Math.max(insets.top + 12, 22);
+  const responsive = useResponsive();
   const glow = useBreathing(0.35, 1, 1400);
 
   const focusState = usePrayerFocus();
@@ -149,7 +151,7 @@ export default function PrayerLockScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: topPad, paddingBottom: insets.bottom + 110 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad, paddingBottom: insets.bottom + 110 }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
       <FadeInView index={0}>
