@@ -4,7 +4,7 @@
     "slug": "wedeen",
     "scheme": "wedeen",
     "version": "1.0.1",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "icon": "./assets/images/icon.png",
     "splash": {

@@ -36,6 +36,11 @@ function normalizeQuranPayload(payload: any) {
   return { surahs: [] };
 }
 
+// Minimum on-disk size for a complete Quran JSON (~114 surahs). Used for a
+// fast existence check on boot — never read/parse the whole file just to see
+// if the cache is warm (that was blocking the splash for seconds on phones).
+const QURAN_MIN_BYTES = 500_000;
+
 async function readQuranFromFile() {
   try {
     const info = await FileSystem.getInfoAsync(QURAN_FILE_PATH);
@@ -85,8 +90,12 @@ export type QuranDownloadProgress = {
 const QURAN_REMOTE_URL = 'https://api.alquran.cloud/v1/quran/quran-uthmani';
 
 export async function isQuranFileCached() {
-  const fileCached = await readQuranFromFile();
-  return !!fileCached;
+  try {
+    const info = await FileSystem.getInfoAsync(QURAN_FILE_PATH);
+    return info.exists && typeof info.size === 'number' && info.size >= QURAN_MIN_BYTES;
+  } catch {
+    return false;
+  }
 }
 
 export async function getOrDownloadQuran(onProgress?: (p: QuranDownloadProgress) => void) {

@@ -36,6 +36,7 @@ import {
   listBlockableAndroidApps,
   type AndroidBlockableApp,
 } from '@/services/salahFocusNative';
+import { expandBlockedPackages } from '@/constants/blockedAppAliases';
 
 const OWN_PACKAGE = Constants.expoConfig?.android?.package ?? 'com.hussnainahmadsahi.wedeen';
 
@@ -174,7 +175,7 @@ export default function SalahFocusScreen() {
         consentAccepted: consent,
         setupComplete: selectedPackages.length > 0,
         windowMinutes,
-        androidBlockedPackages: selectedPackages,
+        androidBlockedPackages: expandBlockedPackages(selectedPackages),
       });
       await syncSalahFocusAfterSave();
       await refreshPrayerFocusNow(false);

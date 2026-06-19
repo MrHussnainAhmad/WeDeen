@@ -39,7 +39,12 @@ runNode('scripts/patch-prayer-lock-native.js');
 console.log('[validate:android] TypeScript check…');
 run('npx', ['tsc', '--noEmit']);
 
-const patchFiles = ['OverlayManager.kt', 'AppBlockerService.kt'];
+const patchFiles = [
+  'OverlayManager.kt',
+  'AppBlockerService.kt',
+  'BlockedPackageAliases.kt',
+  'AppBlockerPrefs.kt',
+];
 const targetDir = path.join(
   projectRoot,
   'node_modules',

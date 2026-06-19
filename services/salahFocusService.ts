@@ -8,7 +8,6 @@ import {
   type PrayerLocation,
 } from './prayerTimingUtils';
 import { isEmergencyUnlockExcluded } from '@/constants/salahFocusEmergency';
-import { pickRandomPrayerLockDialogueTemplate } from './prayerLockDialogues';
 import {
   applyAndroidBlocking,
   configureSalahFocusOverlay,
@@ -263,7 +262,7 @@ async function activateBlocking(config: SalahFocusConfig, now = new Date()) {
     }
 
     await relockSalahFocusApps().catch(() => undefined);
-    configureSalahFocusOverlay(pickRandomPrayerLockDialogueTemplate());
+    configureSalahFocusOverlay();
     applyAndroidBlocking(activePackages);
     if (!monitoringActive) {
       startAndroidMonitoring();
@@ -461,7 +460,7 @@ export async function syncSalahFocusAfterSave() {
   }
 
   if (config.androidBlockedPackages.length > 0) {
-    configureSalahFocusOverlay(pickRandomPrayerLockDialogueTemplate());
+    configureSalahFocusOverlay();
     applyAndroidBlocking(config.androidBlockedPackages);
   }
 }

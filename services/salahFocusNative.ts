@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Platform, Linking } from 'react-native';
-import { pickRandomPrayerLockDialogueTemplate } from './prayerLockDialogues';
+import { getPrayerLockOverlayPool } from './prayerLockDialogues';
+import { expandBlockedPackages } from '@/constants/blockedAppAliases';
 
 type AndroidBlockableApp = {
   packageName: string;
@@ -86,7 +87,7 @@ export function configureSalahFocusOverlay(message?: string) {
   const mod = getNative();
   if (!mod) return;
   try {
-    const dialogue = message ?? pickRandomPrayerLockDialogueTemplate();
+    const dialogue = message ?? getPrayerLockOverlayPool();
     mod.setAndroidConfig({
       overlayTitle: 'WeDeen',
       overlayText: dialogue,
@@ -107,7 +108,8 @@ export function configureSalahFocusOverlay(message?: string) {
 
 export function applyAndroidBlocking(packageNames: string[]) {
   try {
-    getNative()?.setBlockedApps(packageNames);
+    const expanded = expandBlockedPackages(packageNames);
+    getNative()?.setBlockedApps(expanded);
   } catch {
     // non-fatal
   }

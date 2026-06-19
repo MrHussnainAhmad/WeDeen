@@ -2,7 +2,7 @@
 import * as Font from 'expo-font';
 import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getOrDownloadQuran, isQuranFileCached, type QuranDownloadProgress } from './quranService';
-import { areAllBooksCached } from './hadithService';
+import { areAllKnownBooksCachedFast } from './hadithService';
 import { MUHAMMAD_99_NAMES } from '@/constants/muhammadNames';
 
 const BOOT_PRELOAD_DONE_KEY = 'boot_preload_done_v1';
@@ -113,7 +113,7 @@ export async function shouldAskHadithPredownload() {
   const asked = await AsyncStorage.getItem(HADITH_PROMPT_ASKED_KEY);
   if (asked) return false;
   try {
-    if (await areAllBooksCached()) {
+    if (await areAllKnownBooksCachedFast()) {
       await markHadithPredownloadAsked();
       return false;
     }

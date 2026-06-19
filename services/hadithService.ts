@@ -271,6 +271,12 @@ export async function isBookCached(slug: string): Promise<boolean> {
   return !!done;
 }
 
+/** Fast offline check — no network catalog fetch. Used on app boot. */
+export async function areAllKnownBooksCachedFast(): Promise<boolean> {
+  const flags = await Promise.all(ORDER.map((slug) => isBookCached(slug)));
+  return flags.length > 0 && flags.every(Boolean);
+}
+
 async function setBookCached(slug: string) {
   await AsyncStorage.setItem(`${BOOK_CACHED_PREFIX}${slug}${BOOK_CACHED_SUFFIX}`, '1');
 }

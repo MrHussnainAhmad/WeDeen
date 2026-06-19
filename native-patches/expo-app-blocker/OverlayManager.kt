@@ -23,25 +23,33 @@ class OverlayManager(private val context: Context) {
     context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
   private var overlayView: View? = null
+  private var overlayParams: WindowManager.LayoutParams? = null
   private var currentBlockedPackage: String? = null
+  private var lastOverlayLine: String? = null
+
+  /** Show or re-attach the block overlay if the system removed it. */
+  fun ensureShown(blockedPackageName: String, reason: BlockReason = BlockReason.OPENED) {
+    val attached = overlayView?.isAttachedToWindow == true
+    val sameTarget = blockedPackageName == currentBlockedPackage
+    if (attached && sameTarget) return
+    hide()
+    show(blockedPackageName, reason)
+  }
 
   fun show(blockedPackageName: String? = null, reason: BlockReason = BlockReason.OPENED) {
-    if (overlayView != null) {
-      if (blockedPackageName != null && blockedPackageName == currentBlockedPackage) {
-        return
-      }
-      hide()
-    }
-
     currentBlockedPackage = blockedPackageName
     val appName = blockedPackageName?.let { resolveAppName(it) } ?: ""
     val view = buildOverlayView(appName, blockedPackageName)
+    val params = buildLayoutParams()
     try {
-      windowManager.addView(view, buildLayoutParams())
+      windowManager.addView(view, params)
       overlayView = view
+      overlayParams = params
       Log.d(TAG, "Overlay shown for $blockedPackageName")
     } catch (e: Exception) {
       Log.e(TAG, "Failed to add overlay view", e)
+      overlayView = null
+      overlayParams = null
       currentBlockedPackage = null
     }
   }
@@ -49,12 +57,15 @@ class OverlayManager(private val context: Context) {
   fun hide() {
     val view = overlayView ?: return
     try {
-      windowManager.removeView(view)
+      if (view.isAttachedToWindow) {
+        windowManager.removeView(view)
+      }
       Log.d(TAG, "Overlay hidden")
     } catch (e: Exception) {
       Log.e(TAG, "Failed to remove overlay view", e)
     }
     overlayView = null
+    overlayParams = null
     currentBlockedPackage = null
   }
 
@@ -102,7 +113,7 @@ class OverlayManager(private val context: Context) {
 
     val overlayTitle = AppBlockerPrefs.getOverlayTitle(context)
       .replace("{appName}", appName)
-    val overlayText = AppBlockerPrefs.getOverlayText(context)
+    val overlayText = pickOverlayLine(AppBlockerPrefs.getOverlayText(context))
       .replace("{appName}", appName)
     val backgroundColor = parseColorOrDefault(
       AppBlockerPrefs.getOverlayBackgroundColor(context),
@@ -219,6 +230,21 @@ class OverlayManager(private val context: Context) {
     }
   }
 
+  private fun pickOverlayLine(raw: String): String {
+    if (raw.isEmpty()) return raw
+    val parts = raw.split(OVERLAY_TEXT_DELIMITER).filter { it.isNotBlank() }
+    if (parts.isEmpty()) return raw
+    if (parts.size == 1) return parts[0]
+    var line = parts.random()
+    var guard = 0
+    while (line == lastOverlayLine && guard < 5) {
+      line = parts.random()
+      guard++
+    }
+    lastOverlayLine = line
+    return line
+  }
+
   private fun parseColorOrDefault(hex: String, fallback: Int): Int = try {
     Color.parseColor(hex)
   } catch (_: IllegalArgumentException) {
@@ -238,6 +264,7 @@ class OverlayManager(private val context: Context) {
       WindowManager.LayoutParams.MATCH_PARENT,
       type,
       WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
         WindowManager.LayoutParams.FLAG_FULLSCREEN or
         WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
       PixelFormat.OPAQUE
@@ -248,5 +275,6 @@ class OverlayManager(private val context: Context) {
 
   companion object {
     private const val TAG = "ExpoAppBlocker"
+    private const val OVERLAY_TEXT_DELIMITER = '\u001F'
   }
 }

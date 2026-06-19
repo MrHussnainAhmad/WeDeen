@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_blocker_accessibility_description">
+    Lets WeDeen detect when a blocked app opens — including apps with their own fingerprint or PIN lock — so Prayer Lock can pause them during salah.
+  </string>
+</resources>

@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
@@ -81,6 +81,8 @@ export default function RootLayout() {
   // null = still deciding; true = first launch (show boot screen); false = repeat
   // launch (skip boot screen entirely).
   const [needsBoot, setNeedsBoot] = useState<boolean | null>(null);
+  /** Resolved in parallel with font loading so splash isn't blocked sequentially. */
+  const [bootFlags, setBootFlags] = useState<{ shouldRun: boolean; ask: boolean } | null>(null);
   const [showHadithPrompt, setShowHadithPrompt] = useState(false);
   // Live Quran download progress shown on the first-launch boot screen.
   const [quranProgress, setQuranProgress] = useState<QuranDownloadProgress | null>(null);
@@ -97,6 +99,22 @@ export default function RootLayout() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // Decide boot work up front — in parallel with font loading — so repeat launches
+  // don't wait: fonts → then AsyncStorage → then home.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const [shouldRun, ask] = await Promise.all([
+        shouldRunBootPreload().catch(() => false),
+        shouldAskHadithPredownload().catch(() => false),
+      ]);
+      if (mounted) setBootFlags({ shouldRun, ask });
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Prayer-focus coordinator runs in the background; do not auto-open the tab.
   useEffect(() => {
@@ -277,64 +295,36 @@ export default function RootLayout() {
   };
 
   useEffect(() => {
-    if (!fontsLoaded) return;
+    if (!fontsLoaded || bootFlags === null) return;
+    if (!bootFlags.shouldRun) return;
+
     let mounted = true;
+    const { ask } = bootFlags;
+
     const run = async () => {
-      // Decide up front (fast AsyncStorage reads) whether this launch has any
-      // work to show the boot screen for. Until this resolves we render nothing
-      // and the native splash stays up — so a repeat launch never flashes the
-      // green boot screen.
-      let shouldRun = false;
       try {
-        shouldRun = await shouldRunBootPreload();
-      } catch {
-        shouldRun = false;
-      }
-      let ask = false;
-      try {
-        ask = await shouldAskHadithPredownload();
-      } catch {
-        ask = false;
-      }
-      if (!mounted) return;
+        const result = await runBootPreloadOnce((p) => {
+          if (mounted) setQuranProgress(p);
+        });
+        if (!mounted) return;
 
-      if (!shouldRun && !ask) {
-        // Repeat launch: nothing to prepare. Hand the native splash straight to
-        // home — no green boot screen, no fade.
-        setNeedsBoot(false);
-        setBootDone(true);
-        return;
-      }
-
-      // First launch (or a pending hadith prompt): reveal the boot screen, then
-      // do the heavy work behind it.
-      setNeedsBoot(true);
-
-      if (shouldRun) {
-        try {
-          const result = await runBootPreloadOnce((p) => {
-            if (mounted) setQuranProgress(p);
-          });
-          if (!mounted) return;
-
-          if (result === 'continued_in_background') {
-            if (ask) {
-              setShowHadithPrompt(true);
-              setNeedsBoot(false);
-              setBootDone(true);
-              return;
-            }
-            fadeToHome();
+        if (result === 'continued_in_background') {
+          if (ask) {
+            setShowHadithPrompt(true);
+            setNeedsBoot(false);
+            setBootDone(true);
             return;
           }
-        } catch {
-          // Non-blocking: let app continue even if a preload step fails.
+          fadeToHome();
+          return;
         }
+      } catch {
+        // Non-blocking: let app continue even if a preload step fails.
       }
 
       if (!mounted) return;
       if (ask) {
-        setShowHadithPrompt(true); // keep the boot screen; wait for the user's choice
+        setShowHadithPrompt(true);
         return;
       }
       fadeToHome();
@@ -344,7 +334,23 @@ export default function RootLayout() {
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fontsLoaded]);
+  }, [fontsLoaded, bootFlags]);
+
+  // Decide home vs boot screen synchronously before paint — avoids a one-frame
+  // flash and keeps needsBoot accurate for the render gate.
+  useLayoutEffect(() => {
+    if (!fontsLoaded || bootFlags === null) return;
+    const { shouldRun, ask } = bootFlags;
+
+    if (!shouldRun) {
+      setNeedsBoot(false);
+      setBootDone(true);
+      if (ask) setShowHadithPrompt(true);
+      return;
+    }
+
+    setNeedsBoot(true);
+  }, [fontsLoaded, bootFlags]);
 
   // Animate the progress bar toward the latest fraction so it glides instead of
   // jumping between byte-progress callbacks. While the total size is still unknown
@@ -368,8 +374,8 @@ export default function RootLayout() {
   }, []);
 
   // Still deciding (or fonts loading): keep the native splash up by rendering
-  // nothing.
-  if (!fontsLoaded || needsBoot === null) {
+  // nothing. Boot flags resolve in parallel with fonts so we don't wait twice.
+  if (!fontsLoaded || bootFlags === null || needsBoot === null) {
     return null;
   }
 

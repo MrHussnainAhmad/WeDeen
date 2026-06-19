@@ -4,6 +4,20 @@ import { listBlockableAndroidApps } from './salahFocusNative';
 const APP_NAME_PLACEHOLDER = /\{appName\}/gi;
 const FALLBACK_APP_LABEL = 'this app';
 
+/**
+ * Separator used to pack the whole dialogue pool into the single native
+ * overlay-text preference. The native overlay (OverlayManager.kt) splits on
+ * this char and picks a fresh line every time it is shown — so reopening a
+ * blocked app shows a different dialogue. Unit Separator (U+001F) never appears
+ * in the dialogue text.
+ */
+export const OVERLAY_DIALOGUE_DELIMITER = '\u001F';
+
+/** Every dialogue template packed into one string for the native overlay. */
+export function getPrayerLockOverlayPool(): string {
+  return PRAYER_LOCK_DIALOGUES.join(OVERLAY_DIALOGUE_DELIMITER);
+}
+
 let lastIndex = -1;
 
 function dialogueUsesAppName(template: string) {
