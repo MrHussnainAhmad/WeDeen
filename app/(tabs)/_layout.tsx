@@ -13,7 +13,6 @@ export default function TabsLayout() {
           headerShown: false,
           lazy: true,
           animation: 'fade',
-          animationDuration: 180,
           sceneStyle: { backgroundColor: colors.bg },
         }}
       >

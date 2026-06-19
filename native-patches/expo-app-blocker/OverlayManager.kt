@@ -166,7 +166,7 @@ class OverlayManager(private val context: Context) {
       if (blockedPackageName != null) {
         addView(buildActionButton(
           label = "I have prayed",
-          background = Color.parseColor("#C59B27"),
+          backgroundColor = Color.parseColor("#C59B27"),
           textColor = Color.parseColor("#063528"),
           bottomMargin = dp(12f),
         ) {
@@ -175,7 +175,7 @@ class OverlayManager(private val context: Context) {
 
         addView(buildActionButton(
           label = "Emergency unlock",
-          background = Color.parseColor("#1A4D3C"),
+          backgroundColor = Color.parseColor("#1A4D3C"),
           textColor = Color.WHITE,
           bottomMargin = 0,
         ) {
@@ -187,7 +187,7 @@ class OverlayManager(private val context: Context) {
 
   private fun buildActionButton(
     label: String,
-    background: Int,
+    backgroundColor: Int,
     textColor: Int,
     bottomMargin: Int,
     onClick: () -> Unit,
@@ -202,10 +202,10 @@ class OverlayManager(private val context: Context) {
       setTypeface(typeface, Typeface.BOLD)
       gravity = Gravity.CENTER
       val drawable = GradientDrawable().apply {
-        setColor(background)
+        setColor(backgroundColor)
         cornerRadius = dp(14f).toFloat()
       }
-      background = drawable
+      setBackground(drawable)
       setPadding(dp(20f), dp(14f), dp(20f), dp(14f))
       layoutParams = LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT,
