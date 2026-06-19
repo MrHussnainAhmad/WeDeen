@@ -5,7 +5,7 @@ import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Image, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 import { EightPointStar, GeometricDivider } from '@/components/IslamicMotifs';
@@ -31,6 +31,7 @@ import { ringAdhan } from '@/services/adhanController';
 import { maybeRefreshLocation } from '@/services/locationService';
 import { ensureBackgroundLocationRegistered } from '@/services/backgroundLocation';
 import { AdhanAlarmModal } from '@/components/AdhanAlarmModal';
+import { AppLogo } from '@/components/AppLogo';
 import { subscribePrayerFocus, refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
 import { syncMemorizationQueue } from '@/services/memorizationService';
 
@@ -384,7 +385,7 @@ export default function RootLayout() {
         <View style={styles.bootStarTop}>
           <EightPointStar size={26} color={colors.goldBorder} filled={false} />
         </View>
-        <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+        <AppLogo height={140} />
         <Text style={styles.bootBismillah}>{'بِسْمِ اللَّهِ'}</Text>
         <GeometricDivider color={colors.gold} style={{ marginVertical: 14 }} />
         <Text style={styles.bootTitle}>
@@ -487,10 +488,6 @@ const styles = StyleSheet.create({
   bootStarTop: {
     position: 'absolute',
     top: 90,
-  },
-  logo: {
-    width: 124,
-    height: 124,
   },
   bootBismillah: {
     fontFamily: 'KFGQPCNastaleeq',

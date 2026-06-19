@@ -22,8 +22,10 @@ import {
 const CONFIG_KEY = 'salah_focus_config_v1';
 const LOCATION_KEY = 'timings_location_v1';
 const EMERGENCY_UNLOCK_KEY = 'salah_focus_emergency_v1';
+const TEST_LOCK_KEY = 'salah_focus_test_v1';
 const DEFAULT_WINDOW_MINUTES = 30;
 const DEFAULT_EMERGENCY_MINUTES = 15;
+const TEST_LOCK_MINUTES = 5;
 
 export type SalahFocusConfig = {
   enabled: boolean;
@@ -49,6 +51,7 @@ export type SalahFocusRuntimeState = {
   enabled: boolean;
   setupComplete: boolean;
   isLockActive: boolean;
+  isTestLock: boolean;
   activePrayer: PrayerLabel | null;
   windowEndsAt: number | null;
   completedToday: PrayerLabel[];
@@ -129,6 +132,77 @@ type EmergencyUnlockState = {
   expiresAt: number;
   unlockedPackage: string;
 };
+
+type TestLockState = {
+  expiresAt: number;
+};
+
+export type TestPrayerLockStatus = {
+  active: boolean;
+  expiresAt: number | null;
+  secondsLeft: number;
+};
+
+export type StartTestPrayerLockResult =
+  | { ok: true; expiresAt: number }
+  | { ok: false; reason: 'unsupported' | 'no_apps' | 'permissions' };
+
+async function readTestLockState(): Promise<TestLockState | null> {
+  const raw = await AsyncStorage.getItem(TEST_LOCK_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as TestLockState;
+    if (typeof parsed.expiresAt !== 'number') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function clearTestLockState() {
+  await AsyncStorage.removeItem(TEST_LOCK_KEY);
+}
+
+export async function getTestPrayerLockStatus(now = Date.now()): Promise<TestPrayerLockStatus> {
+  const testLock = await readTestLockState();
+  if (!testLock || testLock.expiresAt <= now) {
+    if (testLock) await clearTestLockState();
+    return { active: false, expiresAt: null, secondsLeft: 0 };
+  }
+  return {
+    active: true,
+    expiresAt: testLock.expiresAt,
+    secondsLeft: Math.max(0, Math.ceil((testLock.expiresAt - now) / 1000)),
+  };
+}
+
+export async function startTestPrayerLock(
+  minutes = TEST_LOCK_MINUTES
+): Promise<StartTestPrayerLockResult> {
+  if (!isSalahFocusSupported()) {
+    return { ok: false, reason: 'unsupported' };
+  }
+
+  const config = await getSalahFocusConfig();
+  if (!config.androidBlockedPackages.length) {
+    return { ok: false, reason: 'no_apps' };
+  }
+
+  const perms = await getSalahFocusPermissionStatus();
+  if (!perms.allGranted) {
+    return { ok: false, reason: 'permissions' };
+  }
+
+  const expiresAt = Date.now() + minutes * 60_000;
+  await AsyncStorage.setItem(TEST_LOCK_KEY, JSON.stringify({ expiresAt } satisfies TestLockState));
+  await activateBlocking(config);
+  return { ok: true, expiresAt };
+}
+
+export async function stopTestPrayerLock() {
+  await clearTestLockState();
+  return tickSalahFocus();
+}
 
 export type EmergencyUnlockResult =
   | { ok: true; expiresAt: number; appName?: string }
@@ -224,10 +298,28 @@ export async function evaluateSalahFocus(now = new Date()): Promise<SalahFocusRu
     enabled: config.enabled,
     setupComplete: config.setupComplete,
     isLockActive: false,
+    isTestLock: false,
     activePrayer: null,
     windowEndsAt: null,
     completedToday,
   };
+
+  const nowMs = now.getTime();
+  const testLock = await readTestLockState();
+  if (testLock) {
+    if (testLock.expiresAt <= nowMs) {
+      await clearTestLockState();
+    } else if (config.androidBlockedPackages.length > 0) {
+      await activateBlocking(config, now);
+      return {
+        ...base,
+        isLockActive: true,
+        isTestLock: true,
+        windowEndsAt: testLock.expiresAt,
+        setupComplete: config.setupComplete || config.androidBlockedPackages.length > 0,
+      };
+    }
+  }
 
   if (!supported || !config.enabled || !config.setupComplete || !config.consentAccepted) {
     await deactivateBlocking();
@@ -259,6 +351,7 @@ export async function evaluateSalahFocus(now = new Date()): Promise<SalahFocusRu
   return {
     ...base,
     isLockActive: true,
+    isTestLock: false,
     activePrayer: outstanding.label,
     windowEndsAt: outstanding.end.getTime(),
   };
@@ -272,6 +365,11 @@ export function tickSalahFocus(now = new Date()) {
 
 export async function markSalahFocusPrayerComplete(prayer: PrayerLabel) {
   const now = new Date();
+  const testLock = await readTestLockState();
+  if (testLock && testLock.expiresAt > now.getTime()) {
+    return stopTestPrayerLock();
+  }
+
   const config = await getSalahFocusConfig();
   const dateKey = gregorianKey(now);
   const completedToday = config.completedByDate[dateKey] ?? [];

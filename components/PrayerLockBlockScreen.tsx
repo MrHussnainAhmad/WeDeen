@@ -1,8 +1,9 @@
-import { Image, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider } from '@/components/IslamicMotifs';
 import { PressableScale } from '@/components/Anim';
+import { AppLogo } from '@/components/AppLogo';
 import type { PrayerLabel } from '@/services/prayerTimingUtils';
 
 type Props = {
@@ -34,7 +35,7 @@ export function PrayerLockBlockScreen({
         <EightPointStar size={24} color={colors.goldBorder} filled={false} />
       </View>
 
-      <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+      <AppLogo height={100} style={{ marginBottom: 10 }} />
 
       <Text style={styles.brand}>WeDeen</Text>
       <GeometricDivider color={colors.gold} style={{ marginVertical: 14, width: '40%' }} />
@@ -123,11 +124,6 @@ const styles = StyleSheet.create({
   starTop: {
     position: 'absolute',
     top: 56,
-  },
-  logo: {
-    width: 88,
-    height: 88,
-    marginBottom: 10,
   },
   brand: {
     fontFamily: fonts.serif,

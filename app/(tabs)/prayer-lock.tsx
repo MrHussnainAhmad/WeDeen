@@ -24,6 +24,7 @@ import {
   getSalahFocusLocationRequiredMessage,
   isSalahFocusSupported,
   markSalahFocusPrayerComplete,
+  stopTestPrayerLock,
   type SalahFocusRuntimeState,
 } from '@/services/salahFocusService';
 import { refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
@@ -101,7 +102,8 @@ export default function PrayerLockScreen() {
   }, [state?.isLockActive]);
 
   const supported = isSalahFocusSupported();
-  const isLocked = !!state?.isLockActive && !!state.activePrayer;
+  const isTestLock = !!state?.isTestLock;
+  const isLocked = !!state?.isLockActive && (!!state.activePrayer || isTestLock);
   const needsSetup = !state?.setupComplete || !state?.enabled;
 
   const countdown = useMemo(() => {
@@ -116,11 +118,17 @@ export default function PrayerLockScreen() {
   }, [focusState?.activePrayer, loadNextPrayer]);
 
   const onPrayed = async () => {
-    if (!state?.activePrayer || submitting) return;
+    if (submitting) return;
+    if (!state?.isTestLock && !state?.activePrayer) return;
     setSubmitting(true);
     try {
-      const next = await markSalahFocusPrayerComplete(state.activePrayer as PrayerLabel);
-      setState(next);
+      if (state.isTestLock) {
+        const next = await stopTestPrayerLock();
+        setState(next);
+      } else {
+        const next = await markSalahFocusPrayerComplete(state.activePrayer as PrayerLabel);
+        setState(next);
+      }
       await refreshPrayerFocusNow(false);
       await loadNextPrayer();
     } finally {
@@ -187,16 +195,20 @@ export default function PrayerLockScreen() {
               <Animated.View style={[styles.lockRing, { opacity: glow }]}>
                 <EightPointStar size={54} color={colors.gold} filled={false} />
               </Animated.View>
-              <Text style={styles.lockPrayerLabel}>{state?.activePrayer} prayer</Text>
+              <Text style={styles.lockPrayerLabel}>
+                {isTestLock ? 'Test Prayer Lock' : `${state?.activePrayer} prayer`}
+              </Text>
               <GeometricDivider color="rgba(197,155,39,0.45)" style={{ marginVertical: 14, width: '70%' }} />
               <Text style={styles.lockHint}>{lockDialogue}</Text>
               {countdown ? (
                 <View style={styles.countdownPill}>
                   <Ionicons name="hourglass-outline" size={14} color={colors.gold} />
                   <Text style={styles.countdownText}>
-                    {nowTick < (state?.windowEndsAt ?? 0)
-                      ? `Window ends in ${countdown}`
-                      : 'Confirm salah to unlock your apps'}
+                    {isTestLock
+                      ? `Test ends in ${countdown}`
+                      : nowTick < (state?.windowEndsAt ?? 0)
+                        ? `Window ends in ${countdown}`
+                        : 'Confirm salah to unlock your apps'}
                   </Text>
                 </View>
               ) : null}

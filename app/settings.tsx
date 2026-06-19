@@ -20,6 +20,16 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { deleteAccount, updatePassword } from '@/services/authService';
 import { schedulePrayerAdhan, scheduleTestAdhan } from '@/services/prayerNotificationService';
+import { refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
+import {
+  getSalahFocusConfig,
+  getSalahFocusExpoGoMessage,
+  getSalahFocusPermissionsRequiredMessage,
+  getTestPrayerLockStatus,
+  isSalahFocusSupported,
+  startTestPrayerLock,
+  stopTestPrayerLock,
+} from '@/services/salahFocusService';
 import { useAdhanAlarm } from '@/services/adhanController';
 import { setActiveAudioVolume } from '@/services/audioManager';
 import { getAlarmVolume, setAlarmVolume } from '@/services/alarmVolume';
@@ -77,6 +87,84 @@ export default function SettingsScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [testLockSecondsLeft, setTestLockSecondsLeft] = useState(0);
+  const [blockedAppCount, setBlockedAppCount] = useState(0);
+  const prayerLockSupported = isSalahFocusSupported();
+
+  const refreshPrayerLockTest = useCallback(async () => {
+    const [test, config] = await Promise.all([
+      getTestPrayerLockStatus(),
+      getSalahFocusConfig(),
+    ]);
+    setTestLockSecondsLeft(test.secondsLeft);
+    setBlockedAppCount(config.androidBlockedPackages.length);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPrayerLockTest().catch(() => undefined);
+    }, [refreshPrayerLockTest])
+  );
+
+  useEffect(() => {
+    if (testLockSecondsLeft <= 0) return;
+    const id = setInterval(() => {
+      getTestPrayerLockStatus()
+        .then((test) => {
+          setTestLockSecondsLeft(test.secondsLeft);
+          if (!test.active) {
+            refreshPrayerFocusNow(false).catch(() => undefined);
+          }
+        })
+        .catch(() => undefined);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [testLockSecondsLeft > 0]);
+
+  const formatTestLockCountdown = (totalSec: number) => {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const runTestPrayerLock = async () => {
+    if (testLockSecondsLeft > 0) return;
+    const result = await startTestPrayerLock(5);
+    if (!result.ok) {
+      if (result.reason === 'unsupported') {
+        Alert.alert('Not available', getSalahFocusExpoGoMessage());
+        return;
+      }
+      if (result.reason === 'no_apps') {
+        Alert.alert(
+          'Choose apps first',
+          'Set up Prayer Lock and select at least one app to pause.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open setup', onPress: () => router.push('/salah-focus' as any) },
+          ]
+        );
+        return;
+      }
+      Alert.alert('Permissions needed', getSalahFocusPermissionsRequiredMessage(), [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open setup', onPress: () => router.push('/salah-focus' as any) },
+      ]);
+      return;
+    }
+    await refreshPrayerFocusNow(false);
+    await refreshPrayerLockTest();
+    Alert.alert(
+      'Test Prayer Lock started',
+      'Your selected apps are paused for 5 minutes. Open one to see the block screen, or end the test anytime below.'
+    );
+  };
+
+  const endTestPrayerLock = async () => {
+    await stopTestPrayerLock();
+    await refreshPrayerFocusNow(false);
+    await refreshPrayerLockTest();
+  };
 
   // The pending test-adhan countdown is held in the global store, so it keeps
   // counting (and the adhan still fires) even after leaving this screen.
@@ -374,13 +462,53 @@ export default function SettingsScreen() {
             Pause Instagram, YouTube, WhatsApp and other distracting apps during each prayer.
             Open WeDeen and confirm your salah to unlock them again.
           </Text>
+
+          {prayerLockSupported ? (
+            <View style={styles.testLockMeta}>
+              <Text style={styles.testLockMetaText}>
+                {blockedAppCount > 0
+                  ? `${blockedAppCount} app${blockedAppCount === 1 ? '' : 's'} configured to pause`
+                  : 'No apps selected yet — set up Prayer Lock first'}
+              </Text>
+            </View>
+          ) : null}
+
           <PressableScale
-            onPress={() => router.push('/(tabs)/prayer-lock' as any)}
+            onPress={() => router.push('/salah-focus' as any)}
             style={styles.testButton}
           >
-            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
-            <Text style={styles.testButtonText}>Open Prayer Lock</Text>
+            <Ionicons name="settings-outline" size={16} color={colors.primary} />
+            <Text style={styles.testButtonText}>Manage Prayer Lock & apps</Text>
           </PressableScale>
+
+          {prayerLockSupported ? (
+            <>
+              <PressableScale
+                onPress={runTestPrayerLock}
+                disabled={testLockSecondsLeft > 0 || blockedAppCount === 0}
+                style={[
+                  styles.testButton,
+                  (testLockSecondsLeft > 0 || blockedAppCount === 0) && styles.disabledButton,
+                ]}
+              >
+                <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+                <Text style={styles.testButtonText}>
+                  {testLockSecondsLeft > 0
+                    ? `Test lock active · ${formatTestLockCountdown(testLockSecondsLeft)}`
+                    : 'Test Prayer Lock (5 min)'}
+                </Text>
+              </PressableScale>
+
+              {testLockSecondsLeft > 0 ? (
+                <PressableScale onPress={endTestPrayerLock} style={styles.endTestButton}>
+                  <Ionicons name="lock-open-outline" size={16} color={colors.danger} />
+                  <Text style={styles.endTestButtonText}>End test lock now</Text>
+                </PressableScale>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.adhanHint}>{getSalahFocusExpoGoMessage()}</Text>
+          )}
         </OrnateCard>
 
         <OrnateCard index={4}>
@@ -591,6 +719,29 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   testButtonText: { color: colors.primary, fontWeight: '800', fontSize: 13.5 },
+  testLockMeta: {
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.cardAlt,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+  },
+  testLockMetaText: { color: colors.muted, fontSize: 12.5, fontWeight: '600' },
+  endTestButton: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: '#E8B4AB',
+    borderRadius: radius.sm,
+    paddingVertical: 11,
+  },
+  endTestButtonText: { color: colors.danger, fontWeight: '800', fontSize: 13.5 },
   saveButton: {
     backgroundColor: colors.primary,
     borderRadius: radius.sm,

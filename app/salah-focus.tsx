@@ -17,6 +17,7 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { GeometricDivider } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { AppListIcon } from '@/components/AppListIcon';
+import { SalahFocusPermissionsCard } from '@/components/SalahFocusPermissionsCard';
 import { OrnateCard, SectionHeader } from '@/components/ui';
 import {
   getSalahFocusConfig,
@@ -32,8 +33,6 @@ import { hasPrayerLocationConfigured } from '@/services/locationService';
 import {
   getSalahFocusPermissionStatus,
   listBlockableAndroidApps,
-  openSalahFocusOverlaySettings,
-  openSalahFocusUsageStatsSettings,
   type AndroidBlockableApp,
 } from '@/services/salahFocusNative';
 
@@ -58,7 +57,6 @@ export default function SalahFocusScreen() {
   const [enabled, setEnabled] = useState(false);
   const [consent, setConsent] = useState(false);
   const [windowMinutes, setWindowMinutes] = useState(30);
-  const [permGranted, setPermGranted] = useState(false);
   const [androidApps, setAndroidApps] = useState<AndroidBlockableApp[]>([]);
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -76,8 +74,6 @@ export default function SalahFocusScreen() {
       setHasLocation(await hasPrayerLocationConfigured());
 
       if (supported) {
-        const perms = await getSalahFocusPermissionStatus();
-        setPermGranted(perms.allGranted);
         const apps = await listBlockableAndroidApps();
         const filtered = apps
           .filter((a) => a.packageName !== OWN_PACKAGE)
@@ -96,7 +92,6 @@ export default function SalahFocusScreen() {
   useFocusEffect(
     useCallback(() => {
       hasPrayerLocationConfigured().then(setHasLocation);
-      getSalahFocusPermissionStatus().then((perms) => setPermGranted(perms.allGranted));
     }, [])
   );
 
@@ -112,19 +107,6 @@ export default function SalahFocusScreen() {
     setSelectedPackages((prev) =>
       prev.includes(pkg) ? prev.filter((p) => p !== pkg) : [...prev, pkg]
     );
-  };
-
-  const requestPermissionsFlow = async () => {
-    openSalahFocusOverlaySettings();
-    setTimeout(() => openSalahFocusUsageStatsSettings(), 600);
-    const perms = await getSalahFocusPermissionStatus();
-    setPermGranted(perms.allGranted);
-    if (!perms.allGranted) {
-      Alert.alert(
-        'Permissions needed',
-        'Enable “Display over other apps” and “Usage access” for WeDeen, then return here.'
-      );
-    }
   };
 
   const onAcceptConsent = () => {
@@ -177,8 +159,9 @@ export default function SalahFocusScreen() {
       Alert.alert('Choose apps', 'Select at least one app to pause during prayer.');
       return;
     }
-    if (enabled && !permGranted) {
-      Alert.alert('Permissions needed', 'Grant the required permissions first.');
+    const perms = await getSalahFocusPermissionStatus();
+    if (enabled && !perms.allGranted) {
+      Alert.alert('Permissions needed', getSalahFocusPermissionsRequiredMessage());
       return;
     }
 
@@ -321,15 +304,7 @@ export default function SalahFocusScreen() {
           title="Permissions"
           icon={<Ionicons name="key-outline" size={18} color={colors.primary} />}
         />
-        <Text style={styles.hint}>
-          WeDeen needs overlay and usage access to pause apps during salah. We do not read your
-          screen or messages.
-        </Text>
-        <PressableScale onPress={requestPermissionsFlow} style={styles.actionBtn}>
-          <Text style={styles.actionBtnText}>
-            {permGranted ? 'Permissions granted — review' : 'Grant permissions'}
-          </Text>
-        </PressableScale>
+        <SalahFocusPermissionsCard />
       </OrnateCard>
 
       <OrnateCard index={3}>

@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "icon": "./assets/images/icon.png",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/logo-splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#F8F5EF"
     },
@@ -31,6 +31,15 @@
       "**/*"
     ],
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo-splash.png",
+          "imageWidth": 280,
+          "resizeMode": "contain",
+          "backgroundColor": "#F8F5EF"
+        }
+      ],
       "expo-router",
       [
         "expo-app-blocker",
