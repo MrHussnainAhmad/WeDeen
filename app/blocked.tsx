@@ -102,7 +102,7 @@ export default function BlockedDeepLinkScreen() {
       }
 
       if (!state.isLockActive && !state.isTestLock) {
-        router.replace('/(tabs)/prayer-lock' as any);
+        router.replace('/prayer-lock' as any);
         return;
       }
 

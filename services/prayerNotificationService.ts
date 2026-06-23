@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
-import { getUiPreferences } from '@/utils/preferences';
+import { getPrayerTimingApiParams, getUiPreferences } from '@/utils/preferences';
 import { armForegroundAdhan, ringAdhan, stopAdhan } from './adhanController';
 import {
   gregorianKey,
@@ -328,6 +328,10 @@ async function schedulePrayerAdhanInner(
     await cancelAllPrayerAdhan();
     return false;
   }
+  const prayerTimingParams = getPrayerTimingApiParams(
+    prefs.madhab,
+    prefs.calculationMethodId
+  );
 
   const granted = await ensurePrayerNotificationPermission();
   if (!granted) return false;
@@ -344,6 +348,9 @@ async function schedulePrayerAdhanInner(
     loc: locationKey(location),
     start: gregorianKey(startDay),
     days,
+    school: prayerTimingParams.school,
+    schoolParam: prayerTimingParams.schoolParam,
+    methodId: prayerTimingParams.methodId,
   });
   const previousSignature = await AsyncStorage.getItem(PRAYER_NOTIFICATION_SIGNATURE_KEY);
   if (previousSignature === signature) return true;

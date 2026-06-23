@@ -3,6 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
+import { getPrayerTimingApiParams, getUiPreferences } from '../utils/preferences';
+import { exportWidgetData } from '../services/prayerTimingUtils';
+import { updateSalahLogsState } from '../services/prayerTrackerService';
 
 /**
  * Lightweight prayer-time snapshot for the Home screen.
@@ -169,17 +172,26 @@ export function usePrayerSnapshot(nowTick: number) {
     queryFn: async (): Promise<TimingsPayload | null> => {
       if (!location) return null;
       const date = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
-      const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`;
+      const prefs = await getUiPreferences().catch(() => ({ madhab: 'hanafi', calculationMethodId: 2 }));
+      const { school, schoolParam, methodId } = getPrayerTimingApiParams(
+        prefs.madhab,
+        prefs.calculationMethodId
+      );
+      const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${school}_${schoolParam}_${methodId}_${getLocationCacheKey(location)}`;
+      
+      // Update local salah tracker state
+      updateSalahLogsState(location).catch(() => undefined);
+
       const url =
         location.mode === 'coords' && location.latitude != null && location.longitude != null
-          ? `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=2`
-          : `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=2`;
+          ? `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=${methodId}&school=${schoolParam}`
+          : `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=${methodId}&school=${schoolParam}`;
 
       try {
         const res = await fetch(url);
         const json = await res.json();
         const t = json?.data?.timings || {};
-        return {
+        const parsed = {
           fajr: normalizeTime(t.Fajr),
           sunrise: normalizeTime(t.Sunrise),
           dhuhr: normalizeTime(t.Dhuhr),
@@ -187,13 +199,28 @@ export function usePrayerSnapshot(nowTick: number) {
           maghrib: normalizeTime(t.Maghrib),
           isha: normalizeTime(t.Isha),
         };
+
+        const todayStr = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
+        const newTimingsMap = {
+          [todayStr]: {
+            Fajr: parsed.fajr,
+            Sunrise: parsed.sunrise,
+            Dhuhr: parsed.dhuhr,
+            Asr: parsed.asr,
+            Maghrib: parsed.maghrib,
+            Isha: parsed.isha,
+          }
+        };
+        exportWidgetData(location, school, methodId, newTimingsMap).catch(() => undefined);
+
+        return parsed;
       } catch {
         // Fall back to whatever the Timings tab last cached for today.
         const cached = await AsyncStorage.getItem(cacheKey);
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            return {
+            const resolved = {
               fajr: parsed.fajr ?? '--:--',
               sunrise: parsed.sunrise ?? '--:--',
               dhuhr: parsed.dhuhr ?? '--:--',
@@ -201,6 +228,21 @@ export function usePrayerSnapshot(nowTick: number) {
               maghrib: parsed.maghrib ?? '--:--',
               isha: parsed.isha ?? '--:--',
             };
+
+            const todayStr = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
+            const newTimingsMap = {
+              [todayStr]: {
+                Fajr: resolved.fajr,
+                Sunrise: resolved.sunrise,
+                Dhuhr: resolved.dhuhr,
+                Asr: resolved.asr,
+                Maghrib: resolved.maghrib,
+                Isha: resolved.isha,
+              }
+            };
+            exportWidgetData(location, school, methodId, newTimingsMap).catch(() => undefined);
+
+            return resolved;
           } catch {
             // ignore corrupt cache
           }

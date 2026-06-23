@@ -34,6 +34,10 @@ export const FavoriteVersesCard = React.memo(function FavoriteVersesCard({ index
     } as any);
   };
 
+  const onOpenAll = () => {
+    router.push('/favorite-ayahs' as any);
+  };
+
   return (
     <OrnateCard index={index}>
       <SectionHeader
@@ -51,7 +55,7 @@ export const FavoriteVersesCard = React.memo(function FavoriteVersesCard({ index
         </View>
       ) : (
         <View style={styles.list}>
-          {favorites.slice(0, 8).map((fav) => (
+          {favorites.slice(0, 3).map((fav) => (
             <PressableScale key={`${fav.surahNumber}-${fav.ayahNumber}`} onPress={() => onOpen(fav)}>
               <View style={styles.item}>
                 <Text style={styles.arabic} numberOfLines={2}>
@@ -66,6 +70,12 @@ export const FavoriteVersesCard = React.memo(function FavoriteVersesCard({ index
               </View>
             </PressableScale>
           ))}
+          {favorites.length > 3 ? (
+            <PressableScale onPress={onOpenAll} style={styles.moreButton}>
+              <Text style={styles.moreText}>Show all favorite ayahs</Text>
+              <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+            </PressableScale>
+          ) : null}
         </View>
       )}
     </OrnateCard>
@@ -111,6 +121,22 @@ function makeStyles(colors: ReturnType<typeof useThemeColors>) {
       color: colors.muted,
       fontSize: 12,
       fontWeight: '600',
+    },
+    moreButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: radius.md,
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryTint,
+    },
+    moreText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
     },
   });
 }

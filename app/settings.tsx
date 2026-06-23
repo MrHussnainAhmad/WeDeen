@@ -1,7 +1,7 @@
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -16,6 +16,9 @@ import {
   Text,
   TextInput,
   View,
+  Modal,
+  FlatList,
+  Pressable,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { deleteAccount, updatePassword } from '@/services/authService';
@@ -44,6 +47,7 @@ import { useResponsive } from '@/theme/responsive';
 import { OrnateCard, SectionHeader } from '@/components/ui';
 import {
   getUiPreferences,
+  PRAYER_SCHOOLS,
   saveUiPreferences,
   uiPreferenceDefaults,
   type UiPreferences,
@@ -70,7 +74,19 @@ async function openStoreListing() {
 }
 const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
 
+const CALCULATION_METHODS = [
+  { id: 1, name: 'University of Islamic Sciences, Karachi' },
+  { id: 2, name: 'ISNA — USA/Canada' },
+  { id: 3, name: 'Muslim World League' },
+  { id: 4, name: 'Umm Al-Qura, Makkah' },
+  { id: 5, name: 'Egyptian General Authority' },
+  { id: 7, name: 'Tehran University' },
+  { id: 13, name: 'Diyanet — Turkey' },
+  { id: 15, name: 'Russia Muslims' }
+];
+
 export default function SettingsScreen() {
+  const queryClient = useQueryClient();
   const responsive = useResponsive();
   const themeColors = useThemeColors();
   const colorScheme = useThemeStore((s) => s.colorScheme);
@@ -94,6 +110,25 @@ export default function SettingsScreen() {
   const [nightBrightnessEnabled, setNightBrightnessEnabled] = useState(
     uiPreferenceDefaults.nightBrightnessEnabled
   );
+  const [showTajweedColors, setShowTajweedColors] = useState(
+    uiPreferenceDefaults.showTajweedColors
+  );
+  const [showTafsirOption, setShowTafsirOption] = useState(
+    uiPreferenceDefaults.showTafsirOption
+  );
+  const [quranPlaybackRate, setQuranPlaybackRate] = useState(
+    uiPreferenceDefaults.quranPlaybackRate
+  );
+  const [quranRepeatCount, setQuranRepeatCount] = useState(
+    uiPreferenceDefaults.quranRepeatCount
+  );
+  const [madhab, setMadhab] = useState(
+    uiPreferenceDefaults.madhab
+  );
+  const [calculationMethodId, setCalculationMethodId] = useState(
+    uiPreferenceDefaults.calculationMethodId
+  );
+  const [showMethodModal, setShowMethodModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -208,8 +243,7 @@ export default function SettingsScreen() {
 
   // Persist the full prefs object with an override, so a single setting can be
   // saved immediately (without the Save button) using the latest state.
-  const persistPrefs = (override: Partial<UiPreferences>) => {
-    saveUiPreferences({
+  const buildPrefs = (override: Partial<UiPreferences> = {}): UiPreferences => ({
       arabicAyahFontSize,
       use24HourTime,
       adhanAlertsEnabled,
@@ -217,8 +251,74 @@ export default function SettingsScreen() {
       backgroundLocationEnabled,
       colorScheme,
       nightBrightnessEnabled,
+      showTajweedColors,
+      showTafsirOption,
+      quranPlaybackRate,
+      quranRepeatCount,
+      madhab,
+      calculationMethodId,
       ...override,
-    }).catch(() => undefined);
+    });
+
+  const clearPrayerTimingCaches = async () => {
+    const keys = await AsyncStorage.getAllKeys();
+    const targets = keys.filter(
+      (k) => k.startsWith('prayer_calendar_v1_') || k.startsWith('timings_cache_v1_')
+    );
+    if (targets.length) {
+      await AsyncStorage.multiRemove(targets);
+    }
+  };
+
+  const refreshPrayerTimingState = async () => {
+    await clearPrayerTimingCaches().catch(() => undefined);
+    queryClient.invalidateQueries({ queryKey: ['prayer-timings'] });
+    queryClient.invalidateQueries({ queryKey: ['home-prayer-timings'] });
+    try {
+      const raw = await AsyncStorage.getItem('timings_location_v1');
+      await schedulePrayerAdhan(raw ? JSON.parse(raw) : null);
+    } catch {
+      // non-fatal
+    }
+  };
+
+  const persistPrefs = (override: Partial<UiPreferences>) => {
+    return saveUiPreferences(buildPrefs(override)).catch(() => undefined);
+  };
+
+  const showReloadAlertAndRestart = () => {
+    Alert.alert(
+      'Update Prayer Times',
+      'Updating prayer times and settings. Please press OK to restart the app and apply the changes.',
+      [
+        {
+          text: 'OK',
+          onPress: async () => {
+            try {
+              const { reloadAsync } = await import('expo-updates');
+              await reloadAsync();
+            } catch (err) {
+              try {
+                const DevSettings = require('react-native').DevSettings;
+                DevSettings.reload();
+              } catch {
+                router.replace('/(tabs)');
+              }
+            }
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  };
+
+  const persistPrayerTimingPrefs = (override: Partial<UiPreferences>) => {
+    persistPrefs(override)
+      .then(refreshPrayerTimingState)
+      .then(() => {
+        showReloadAlertAndRestart();
+      })
+      .catch(() => undefined);
   };
 
   const onToggleBackgroundLocation = (value: boolean) => {
@@ -267,6 +367,12 @@ export default function SettingsScreen() {
           setAdhanVolume(prefs.adhanVolume);
           setBackgroundLocationEnabled(prefs.backgroundLocationEnabled);
           setNightBrightnessEnabled(prefs.nightBrightnessEnabled);
+          setShowTajweedColors(prefs.showTajweedColors);
+          setShowTafsirOption(prefs.showTafsirOption);
+          setQuranPlaybackRate(prefs.quranPlaybackRate);
+          setQuranRepeatCount(prefs.quranRepeatCount);
+          setMadhab(prefs.madhab);
+          setCalculationMethodId(prefs.calculationMethodId);
         })
         .catch(() => undefined);
       // On a real build, show the actual device alarm volume on the slider.
@@ -279,25 +385,10 @@ export default function SettingsScreen() {
   );
 
   const savePrefsMutation = useMutation({
-    mutationFn: () =>
-      saveUiPreferences({
-        arabicAyahFontSize,
-        use24HourTime,
-        adhanAlertsEnabled,
-        adhanVolume,
-        backgroundLocationEnabled,
-        colorScheme,
-        nightBrightnessEnabled,
-      }),
+    mutationFn: () => saveUiPreferences(buildPrefs()),
     onSuccess: async () => {
-      // Apply the adhan-alerts toggle: schedule (or cancel) based on the saved
-      // preference + location. schedulePrayerAdhan reads the freshly-saved flag.
-      try {
-        const raw = await AsyncStorage.getItem('timings_location_v1');
-        await schedulePrayerAdhan(raw ? JSON.parse(raw) : null);
-      } catch {
-        // non-fatal
-      }
+      // Clear cached prayer calendars in AsyncStorage to trigger immediate recalculation
+      await refreshPrayerTimingState();
       Alert.alert('Saved', 'Settings updated successfully.');
     },
     onError: () => Alert.alert('Error', 'Could not save settings right now.'),
@@ -389,6 +480,30 @@ export default function SettingsScreen() {
               {BISMILLAH}
             </Text>
           </View>
+          <View style={[styles.switchRow, { marginTop: 16 }]}>
+            <Text style={styles.switchText}>Show Tajweed Colors</Text>
+            <Switch
+              value={showTajweedColors}
+              onValueChange={(value) => {
+                setShowTajweedColors(value);
+                persistPrefs({ showTajweedColors: value });
+              }}
+              trackColor={{ false: '#C9D7D1', true: themeColors.primary }}
+              thumbColor={showTajweedColors ? themeColors.gold : '#FFFFFF'}
+            />
+          </View>
+          <View style={[styles.switchRow, { marginTop: 14 }]}>
+            <Text style={styles.switchText}>Show Tafsir Option</Text>
+            <Switch
+              value={showTafsirOption}
+              onValueChange={(value) => {
+                setShowTafsirOption(value);
+                persistPrefs({ showTafsirOption: value });
+              }}
+              trackColor={{ false: '#C9D7D1', true: themeColors.primary }}
+              thumbColor={showTafsirOption ? themeColors.gold : '#FFFFFF'}
+            />
+          </View>
         </OrnateCard>
 
         <OrnateCard index={1}>
@@ -449,6 +564,102 @@ export default function SettingsScreen() {
               thumbColor={use24HourTime ? colors.gold : '#FFFFFF'}
             />
           </View>
+        </OrnateCard>
+
+        <OrnateCard index={2.5}>
+          <SectionHeader
+            title="Prayer Settings"
+            icon={<MaterialCommunityIcons name="mosque" size={18} color={themeColors.primary} />}
+          />
+          <Text style={[styles.label, { marginBottom: 8 }]}>School (Madhab)</Text>
+          <View style={styles.madhabContainer}>
+            {PRAYER_SCHOOLS.map((school) => (
+              <PressableScale
+                key={school.id}
+                onPress={() => {
+                  setMadhab(school.id);
+                  persistPrayerTimingPrefs({ madhab: school.id });
+                }}
+                style={[styles.madhabButton, madhab === school.id && styles.madhabButtonActive]}
+              >
+                <Text style={[styles.madhabButtonText, madhab === school.id && styles.madhabButtonTextActive]}>
+                  {school.label}
+                </Text>
+              </PressableScale>
+            ))}
+          </View>
+
+          <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Calculation Method</Text>
+          {madhab === 'jaffri' ? (
+            <View style={styles.pickerSelector}>
+              <Text style={styles.pickerSelectorText} numberOfLines={1}>
+                Jafari / Shia Ithna-Ashari
+              </Text>
+              <Ionicons name="checkmark-circle" size={16} color={themeColors.primary} />
+            </View>
+          ) : (
+            <PressableScale
+              onPress={() => setShowMethodModal(true)}
+              style={styles.pickerSelector}
+            >
+              <Text style={styles.pickerSelectorText} numberOfLines={1}>
+                {CALCULATION_METHODS.find(m => m.id === calculationMethodId)?.name || 'Select Method'}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={themeColors.primary} />
+            </PressableScale>
+          )}
+          {madhab === 'jaffri' ? (
+            <Text style={styles.adhanHint}>
+              Jaffri prayer times use the Jafari calculation method automatically for alerts and timers.
+            </Text>
+          ) : null}
+
+          <Modal
+            visible={showMethodModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowMethodModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Calculation Method</Text>
+                <FlatList
+                  data={CALCULATION_METHODS}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item }) => (
+                    <Pressable
+                      onPress={() => {
+                        setCalculationMethodId(item.id);
+                        persistPrayerTimingPrefs({ calculationMethodId: item.id });
+                        setShowMethodModal(false);
+                      }}
+                      style={[
+                        styles.modalItem,
+                        calculationMethodId === item.id && styles.modalItemActive
+                      ]}
+                    >
+                      <Text style={[
+                        styles.modalItemText,
+                        calculationMethodId === item.id && styles.modalItemTextActive
+                      ]}>
+                        {item.name}
+                      </Text>
+                      {calculationMethodId === item.id && (
+                        <Ionicons name="checkmark-circle" size={18} color={themeColors.primary} />
+                      )}
+                    </Pressable>
+                  )}
+                  style={{ maxHeight: 350 }}
+                />
+                <PressableScale
+                  onPress={() => setShowMethodModal(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Text style={styles.modalCloseButtonText}>Close</Text>
+                </PressableScale>
+              </View>
+            </View>
+          </Modal>
         </OrnateCard>
 
         <OrnateCard index={3}>
@@ -861,4 +1072,109 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   rateButtonText: { color: colors.goldDeep, fontWeight: '800', fontSize: 14 },
+  madhabContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  madhabButton: {
+    flexGrow: 1,
+    minWidth: '30%',
+    paddingVertical: 10,
+    borderRadius: radius.sm,
+    backgroundColor: colors.cardAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  madhabButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  madhabButtonText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  madhabButtonTextActive: {
+    color: '#fff',
+  },
+  pickerSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.cardAlt,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  pickerSelectorText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '600',
+    flex: 1,
+    paddingRight: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 20,
+    ...shadow.card,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    fontFamily: fonts.serif,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSoft,
+  },
+  modalItemActive: {
+    backgroundColor: colors.primarySoft,
+  },
+  modalItemText: {
+    fontSize: 13.5,
+    color: colors.text,
+    fontWeight: '600',
+    flex: 1,
+    paddingRight: 10,
+  },
+  modalItemTextActive: {
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  modalCloseButton: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
 });

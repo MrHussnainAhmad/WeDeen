@@ -18,7 +18,7 @@ export default function QuranListScreen() {
   const responsive = useResponsive();
 
   const goHome = useCallback(() => {
-    goBackOrReplace('/(tabs)/index');
+    goBackOrReplace('/');
     return true;
   }, []);
   useHardwareBack(goHome);
@@ -58,8 +58,20 @@ export default function QuranListScreen() {
   }
 
   return (
-    <FlatList
-      style={styles.screen}
+    <View style={styles.container}>
+      <View style={[styles.headerBar, { paddingTop: insets.top + 12 }]}>
+        <PressableScale onPress={goHome} style={styles.headerBackButton}>
+          <Ionicons name="chevron-back" size={22} color="#fff" />
+        </PressableScale>
+        <Text style={styles.headerTitle}>Holy Quran</Text>
+        <Link href="/quran/search" asChild>
+          <PressableScale style={styles.headerSearchButton}>
+            <Ionicons name="search" size={20} color="#fff" />
+          </PressableScale>
+        </Link>
+      </View>
+      <FlatList
+        style={styles.screen}
       data={surahs}
       keyExtractor={(item: any) => String(item.number)}
       initialNumToRender={12}
@@ -95,10 +107,49 @@ export default function QuranListScreen() {
       contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: colors.primaryDeep,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadow.raised,
+  },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    fontFamily: fonts.serif,
+  },
+  headerSearchButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screen: { flex: 1, backgroundColor: colors.bg },
   center: {
     flex: 1,

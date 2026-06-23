@@ -184,7 +184,7 @@ export default function PrayerLockScreen() {
               <Ionicons name="location-outline" size={22} color={colors.primary} />
               <Text style={styles.locationWarnText}>{getSalahFocusLocationRequiredMessage()}</Text>
               <PressableScale
-                onPress={() => router.push('/(tabs)/hijri' as any)}
+                onPress={() => router.push('/hijri' as any)}
                 style={styles.locationWarnBtn}
               >
                 <Text style={styles.locationWarnBtnText}>Set location on Timings</Text>

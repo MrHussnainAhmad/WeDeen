@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getPrayerSchoolLabel, getPrayerTimingApiParams, getUiPreferences } from '../utils/preferences';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export const PRAYER_LABELS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
 export type PrayerLabel = (typeof PRAYER_LABELS)[number];
@@ -48,13 +50,13 @@ function locationKey(loc: PrayerLocation) {
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
 }
 
-function calendarUrl(loc: PrayerLocation, year: number, month: number) {
+function calendarUrl(loc: PrayerLocation, year: number, month: number, methodId: number, school: number) {
   if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
-    return `https://api.aladhan.com/v1/calendar?latitude=${loc.latitude}&longitude=${loc.longitude}&method=2&month=${month}&year=${year}`;
+    return `https://api.aladhan.com/v1/calendar?latitude=${loc.latitude}&longitude=${loc.longitude}&method=${methodId}&school=${school}&month=${month}&year=${year}`;
   }
   return `https://api.aladhan.com/v1/calendarByCity?city=${encodeURIComponent(
     loc.city
-  )}&country=${encodeURIComponent(loc.country)}&method=2&month=${month}&year=${year}`;
+  )}&country=${encodeURIComponent(loc.country)}&method=${methodId}&school=${school}&month=${month}&year=${year}`;
 }
 
 export async function getMonthTimings(
@@ -62,11 +64,16 @@ export async function getMonthTimings(
   year: number,
   month: number
 ): Promise<Record<string, Record<string, string>>> {
-  const cacheKey = `${PRAYER_CALENDAR_PREFIX}${locationKey(loc)}_${year}-${pad(month)}`;
+  const prefs = await getUiPreferences().catch(() => ({ madhab: 'hanafi', calculationMethodId: 2 }));
+  const { school, schoolParam, methodId } = getPrayerTimingApiParams(
+    prefs.madhab,
+    prefs.calculationMethodId
+  );
+  const cacheKey = `${PRAYER_CALENDAR_PREFIX}${locationKey(loc)}_${school}_${schoolParam}_${methodId}_${year}-${pad(month)}`;
   let days: any[] | null = null;
 
   try {
-    const res = await fetch(calendarUrl(loc, year, month));
+    const res = await fetch(calendarUrl(loc, year, month, methodId, schoolParam));
     const json = await res.json();
     if (Array.isArray(json?.data)) {
       days = json.data;
@@ -92,6 +99,11 @@ export async function getMonthTimings(
     const key = day?.date?.gregorian?.date;
     if (key && day?.timings) map[key] = day.timings;
   }
+
+  if (days && days.length > 0) {
+    exportWidgetData(loc, school, methodId, map).catch((err) => console.error('exportWidgetData err:', err));
+  }
+
   return map;
 }
 
@@ -155,4 +167,88 @@ export async function getOutstandingPrayerLock(
   }
 
   return null;
+}
+
+export async function exportWidgetData(
+  location: any,
+  school: unknown,
+  methodId: number,
+  newTimings: Record<string, Record<string, string>>
+) {
+  try {
+    const targetPath = `${FileSystem.documentDirectory}widget_data.json`;
+    let timings: Record<string, Record<string, string>> = {};
+
+    try {
+      const info = await FileSystem.getInfoAsync(targetPath);
+      if (info.exists) {
+        const raw = await FileSystem.readAsStringAsync(targetPath);
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.timings === 'object') {
+          timings = parsed.timings;
+        }
+      }
+    } catch (e) {
+      // Ignore reading errors
+    }
+
+    for (const dateKey of Object.keys(newTimings)) {
+      const inputTimes = newTimings[dateKey];
+      const normalized: Record<string, string> = {};
+      for (const prayer of Object.keys(inputTimes)) {
+        normalized[prayer] = (inputTimes[prayer] || '').slice(0, 5);
+      }
+      timings[dateKey] = {
+        ...timings[dateKey],
+        ...normalized,
+      };
+    }
+
+    const sortedKeys = Object.keys(timings).sort((a, b) => {
+      const [da, ma, ya] = a.split('-').map(Number);
+      const [db, mb, yb] = b.split('-').map(Number);
+      const ta = new Date(ya, ma - 1, da).getTime();
+      const tb = new Date(yb, mb - 1, db).getTime();
+      return ta - tb;
+    });
+    if (sortedKeys.length > 60) {
+      const keysToRemove = sortedKeys.slice(0, sortedKeys.length - 60);
+      for (const k of keysToRemove) {
+        delete timings[k];
+      }
+    }
+
+    const methodNames: Record<number, string> = {
+      0: "Jafari",
+      1: "Karachi",
+      2: "ISNA",
+      3: "MWL",
+      4: "Makkah",
+      5: "Egyptian",
+      7: "Tehran",
+      13: "Diyanet",
+      15: "Russia"
+    };
+    const methodName = methodNames[methodId] || "Custom";
+    const schoolName = getPrayerSchoolLabel(school);
+    const locationName = location
+      ? location.city && location.city !== 'Unknown City'
+        ? `${location.city}, ${location.country}`
+        : location.latitude != null && location.longitude != null
+          ? `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}`
+          : "Unknown Location"
+      : null;
+
+    const payload = {
+      locationName,
+      school: schoolName,
+      methodName,
+      timings,
+      lastUpdated: Date.now()
+    };
+
+    await FileSystem.writeAsStringAsync(targetPath, JSON.stringify(payload));
+  } catch (err) {
+    console.error('Failed to export widget data:', err);
+  }
 }

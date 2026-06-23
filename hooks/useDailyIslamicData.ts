@@ -1,4 +1,4 @@
-﻿import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ummahApi } from '@/services/http';
@@ -100,6 +100,7 @@ export function useDailyIslamicData() {
         : 'Hijri date unavailable';
       const hijriDay = hijri?.day ?? null;
       const hijriMonth = hijri?.month?.en ?? null;
+      const hijriMonthNumber = hijri?.month?.number ? Number(hijri.month.number) : null;
       const hijriYear = hijri?.year ?? null;
       const hijriWeekday = hijri?.weekday?.en ?? null;
 
@@ -126,6 +127,7 @@ export function useDailyIslamicData() {
         hijriDate,
         hijriDay,
         hijriMonth,
+        hijriMonthNumber,
         hijriYear,
         hijriWeekday,
         reminder,

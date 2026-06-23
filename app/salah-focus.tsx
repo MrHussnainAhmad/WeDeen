@@ -130,7 +130,7 @@ export default function SalahFocusScreen() {
         getSalahFocusLocationRequiredMessage(),
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Timings', onPress: () => router.push('/(tabs)/hijri' as any) },
+          { text: 'Open Timings', onPress: () => router.push('/hijri' as any) },
         ]
       );
       return;
@@ -153,7 +153,7 @@ export default function SalahFocusScreen() {
         getSalahFocusLocationRequiredMessage(),
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Timings', onPress: () => router.push('/(tabs)/hijri' as any) },
+          { text: 'Open Timings', onPress: () => router.push('/hijri' as any) },
         ]
       );
       return;
@@ -185,7 +185,7 @@ export default function SalahFocusScreen() {
           text: 'OK',
           onPress: () => {
             if (router.canGoBack()) router.back();
-            else router.replace('/(tabs)/prayer-lock' as any);
+            else router.replace('/prayer-lock' as any);
           },
         },
       ]);
@@ -245,7 +245,7 @@ export default function SalahFocusScreen() {
               {getSalahFocusLocationRequiredMessage()}
             </Text>
             <PressableScale
-              onPress={() => router.push('/(tabs)/hijri' as any)}
+              onPress={() => router.push('/hijri' as any)}
               style={styles.locationBannerBtn}
             >
               <Text style={styles.locationBannerBtnText}>Open Timings</Text>

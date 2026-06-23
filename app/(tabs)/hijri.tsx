@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useFocusEffect } from 'expo-router';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -8,17 +9,28 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
-import { TabFadeInView, PressableScale } from '@/components/Anim';
-import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
+import { FadeInView, PressableScale } from '@/components/Anim';
 import { OrnateCard, SectionHeader } from '@/components/ui';
-import { useResponsive } from '@/theme/responsive';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
+import { playManagedAudio } from '@/services/audioManager';
 import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
-import { saveLocation, getSavedLocation, type SavedLocation } from '@/services/locationService';
-import { BannerAdSpace } from '@/components/BannerAdSpace';
+
+type SavedLocation = {
+  mode: 'coords' | 'city';
+  city: string;
+  country: string;
+  latitude?: number;
+  longitude?: number;
+  locked: boolean;
+};
 
 const LOCATION_KEY = 'timings_location_v1';
+const ADHAN_KEY = 'adhan_file_path_v1';
+const PLAYED_KEY = 'played_prayer_mark_v1';
+const ADHAN_URL = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg';
 const TIMINGS_CACHE_PREFIX = 'timings_cache_v1_';
+
+const PRAYER_KEYS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
@@ -73,16 +85,52 @@ function formatGregorianLabel(gregorian?: any) {
   return `${day} ${month} ${year}`.trim();
 }
 
+async function getSavedLocation() {
+  const raw = await AsyncStorage.getItem(LOCATION_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SavedLocation;
+  } catch {
+    return null;
+  }
+}
+
+async function saveLocation(loc: SavedLocation) {
+  await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(loc));
+}
+
 function getLocationCacheKey(loc: SavedLocation) {
-  if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
+  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
     return `coords_${loc.latitude.toFixed(4)}_${loc.longitude.toFixed(4)}`;
   }
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
 }
 
+async function ensureAdhanFile() {
+  const existing = await AsyncStorage.getItem(ADHAN_KEY);
+  if (existing) {
+    const info = await FileSystem.getInfoAsync(existing);
+    if (info.exists) return existing;
+  }
+
+  const dir = `${FileSystem.documentDirectory}audio/`;
+  await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  const target = `${dir}adhan.ogg`;
+  const info = await FileSystem.getInfoAsync(target);
+  if (!info.exists) {
+    await FileSystem.downloadAsync(ADHAN_URL, target);
+  }
+  await AsyncStorage.setItem(ADHAN_KEY, target);
+  return target;
+}
+
+async function playAdhan() {
+  const uri = await ensureAdhanFile();
+  await playManagedAudio({ uri });
+}
+
 export default function TimingsScreen() {
   const insets = useSafeAreaInsets();
-  const responsive = useResponsive();
   const [locationLoading, setLocationLoading] = useState(true);
   const [location, setLocation] = useState<SavedLocation | null>(null);
   const [manualCity, setManualCity] = useState('');
@@ -95,6 +143,7 @@ export default function TimingsScreen() {
   const [calendarMonth, setCalendarMonth] = useState(1);
   const [calendarYear, setCalendarYear] = useState(1447);
   const [calendarInitialized, setCalendarInitialized] = useState(false);
+  const timerRef = useRef<any>(null);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -118,6 +167,12 @@ export default function TimingsScreen() {
     let mounted = true;
 
     const bootstrap = async () => {
+      try {
+        await ensureAdhanFile();
+      } catch {
+        // non-fatal
+      }
+
       const saved = await getSavedLocation();
       if (saved) {
         if (!mounted) return;
@@ -142,7 +197,7 @@ export default function TimingsScreen() {
             country,
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
-            locked: false
+            locked: true
           };
           await saveLocation(autoLoc);
           if (!mounted) return;
@@ -175,7 +230,7 @@ export default function TimingsScreen() {
       const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`;
       let url = '';
 
-      if (location.mode === 'coords' && location.latitude != null && location.longitude != null) {
+      if (location.mode === 'coords' && location.latitude && location.longitude) {
         url = `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=2`;
       } else {
         url = `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=2`;
@@ -258,13 +313,53 @@ export default function TimingsScreen() {
     }
   });
 
-  // Arm the 7-day adhan notifications whenever the location changes. The adhan
-  // itself (full audio in foreground, short clip in background) is driven by the
-  // notification handler in _layout, so no foreground polling is needed here.
   useEffect(() => {
-    if (!location) return;
+    if (!timingsQuery.data) return;
+    const timings = timingsQuery.data;
+
+    const runCheck = async () => {
+      const nowDate = new Date();
+      const dateK = todayKey(nowDate);
+      const raw = await AsyncStorage.getItem(PLAYED_KEY);
+      const playedMap = raw ? JSON.parse(raw) : {};
+      playedMap[dateK] = playedMap[dateK] || {};
+
+      const prayerMap: Record<string, string> = {
+        Fajr: timings.fajr,
+        Dhuhr: timings.dhuhr,
+        Asr: timings.asr,
+        Maghrib: timings.maghrib,
+        Isha: timings.isha
+      };
+
+      for (const prayer of PRAYER_KEYS) {
+        const t = prayerMap[prayer];
+        if (!t) continue;
+        const target = parsePrayerDate(t, nowDate);
+        const diff = Math.abs(nowDate.getTime() - target.getTime());
+        if (diff <= 20_000 && !playedMap[dateK][prayer]) {
+          playedMap[dateK][prayer] = true;
+          await AsyncStorage.setItem(PLAYED_KEY, JSON.stringify(playedMap));
+          await playAdhan();
+        }
+      }
+    };
+
+    runCheck().catch(() => undefined);
+    timerRef.current = setInterval(() => {
+      runCheck().catch(() => undefined);
+    }, 10_000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [timingsQuery.data]);
+
+  useEffect(() => {
+    if (!timingsQuery.data || !location) return;
+    const data = timingsQuery.data;
     schedulePrayerAdhan(location).catch(() => undefined);
-  }, [location?.city, location?.country, location?.latitude, location?.longitude, location?.mode]);
+  }, [timingsQuery.data, location?.city, location?.country, location?.latitude, location?.longitude, location?.mode]);
 
   const hijriCells = useMemo(() => {
     const rows = monthCalendarQuery.data || [];
@@ -307,7 +402,7 @@ export default function TimingsScreen() {
       country,
       latitude: pos.coords.latitude,
       longitude: pos.coords.longitude,
-      locked: false
+      locked: true
     };
     await saveLocation(loc);
     setLocation(loc);
@@ -363,14 +458,13 @@ export default function TimingsScreen() {
     : 'Loading Gregorian range';
 
   return (
-    <TabSceneGuard>
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
       showsVerticalScrollIndicator={false}
     >
       {/* ───── Next Prayer Hero ───── */}
-      <TabFadeInView>
+      <FadeInView index={0}>
         <View style={styles.hero}>
           <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
           <View style={styles.heroGoldTop} />
@@ -419,7 +513,7 @@ export default function TimingsScreen() {
           </View>
 
         </View>
-      </TabFadeInView>
+      </FadeInView>
 
       {/* ───── Location ───── */}
       <OrnateCard index={1}>
@@ -428,20 +522,10 @@ export default function TimingsScreen() {
           icon={<Ionicons name="location" size={18} color={colors.primary} />}
         />
         <Text style={styles.locationText}>
-          {locationLoading
-            ? 'Detecting location...'
-            : location
-              ? `${location.city || 'Unknown'}, ${location.country || ''}`
-              : 'No location set'}
+          {locationLoading ? 'Detecting location...' : `${location?.city || 'Unknown'}, ${location?.country || ''}`}
         </Text>
         <Text style={styles.locationSubText}>
-          {locationLoading
-            ? 'Please wait…'
-            : !location
-              ? 'Enable location or enter a city to see prayer times.'
-              : location.locked
-                ? 'Locked to your chosen city.'
-                : 'Auto-updates to your current location.'}
+          {location?.locked ? 'Location is locked to your selection.' : 'Auto-location is active.'}
         </Text>
 
         <PressableScale onPress={() => setShowLocationEditor((v) => !v)} style={styles.linkButton}>
@@ -507,8 +591,6 @@ export default function TimingsScreen() {
       </OrnateCard>
 
       {/* ───── Hijri Calendar ───── */}
-      <BannerAdSpace />
-
       <OrnateCard index={3}>
         <SectionHeader
           title="Hijri Calendar"
@@ -595,7 +677,6 @@ export default function TimingsScreen() {
         <GeometricDivider color={colors.goldBorder} />
       </View>
     </ScrollView>
-    </TabSceneGuard>
   );
 }
 
@@ -607,7 +688,7 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     gap: 16,
-    paddingBottom: 128,
+    paddingBottom: 110,
   },
 
   // Hero

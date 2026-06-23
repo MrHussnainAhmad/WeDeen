@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ type DownloadState = 'idle' | 'running' | 'done';
 export default function HadithBooksScreen() {
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
+  const router = useRouter();
   const [dlState, setDlState] = useState<DownloadState>('idle');
   const [progress, setProgress] = useState({ fraction: 0, booksDone: 0, booksTotal: 0 });
 
@@ -31,26 +32,32 @@ export default function HadithBooksScreen() {
     gcTime: 1000 * 60 * 60,
   });
 
-  // Reflect existing offline state on entry.
-  useEffect(() => {
-    let mounted = true;
-    areAllBooksCached()
-      .then((all) => {
-        if (mounted && all) setDlState('done');
-      })
-      .catch(() => undefined);
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // Reflect existing offline state on entry and whenever the screen regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      areAllBooksCached()
+        .then((all) => {
+          if (!mounted) return;
+          if (all) setDlState('done');
+        })
+        .catch(() => undefined);
+      return () => {
+        mounted = false;
+      };
+    }, [])
+  );
 
   const startOfflineDownload = () => {
     if (dlState !== 'idle') return;
     setDlState('running');
     setProgress({ fraction: 0, booksDone: 0, booksTotal: 0 });
-    cacheAllBooksInBackground((p) =>
-      setProgress({ fraction: p.fraction, booksDone: p.booksDone, booksTotal: p.booksTotal })
-    )
+    cacheAllBooksInBackground((p) => {
+      setProgress({ fraction: p.fraction, booksDone: p.booksDone, booksTotal: p.booksTotal });
+      if (p.booksTotal > 0 && p.booksDone >= p.booksTotal) {
+        setDlState('done');
+      }
+    })
       .then(async () => {
         const all = await areAllBooksCached().catch(() => false);
         setDlState(all ? 'done' : 'idle');
@@ -79,9 +86,25 @@ export default function HadithBooksScreen() {
 
   const books = data ?? [];
 
+  const goHome = () => {
+    router.replace('/');
+  };
+
   return (
-    <FlatList
-      style={styles.screen}
+    <View style={styles.container}>
+      <View style={[styles.headerBar, { paddingTop: insets.top + 12 }]}>
+        <PressableScale onPress={goHome} style={styles.headerBackButton}>
+          <Ionicons name="chevron-back" size={22} color="#fff" />
+        </PressableScale>
+        <Text style={styles.headerTitle}>Hadith Books</Text>
+        <Link href="/hadith/search" asChild>
+          <PressableScale style={styles.headerSearchButton}>
+            <Ionicons name="search" size={20} color="#fff" />
+          </PressableScale>
+        </Link>
+      </View>
+      <FlatList
+        style={styles.screen}
       data={books}
       keyExtractor={(item: HadithBook) => item.slug}
       ListHeaderComponent={
@@ -142,10 +165,49 @@ export default function HadithBooksScreen() {
       contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: colors.primaryDeep,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadow.raised,
+  },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    fontFamily: fonts.serif,
+  },
+  headerSearchButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screen: { flex: 1, backgroundColor: colors.bg },
   skeletonWrap: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 14, paddingTop: 14, gap: 12 },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },

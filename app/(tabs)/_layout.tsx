@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { CustomTabBar } from '@/components/navigation/CustomTabBar';
+import { AudioMiniPlayer } from '@/components/audio/AudioMiniPlayer';
 import { colors } from '@/theme/colors';
 
 export default function TabsLayout() {
@@ -25,6 +26,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="memorization" options={{ title: 'Memorize' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       </Tabs>
+      <AudioMiniPlayer />
     </View>
   );
 }

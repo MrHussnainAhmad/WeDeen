@@ -3,7 +3,7 @@
     "name": "WeDeen",
     "slug": "wedeen",
     "scheme": "wedeen",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "default",
     "platforms": [
       "android"
@@ -21,7 +21,7 @@
         "backgroundColor": "#F8F5EF"
       },
       "package": "com.hussnainahmadsahi.wedeen",
-      "versionCode": 2,
+      "versionCode": 3,
       "backgroundColor": "#F6F1E7",
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
@@ -85,7 +85,8 @@
           "locationAlwaysAndWhenInUsePermission": "Allow WeDeen to use your location to keep prayer times and the adhan accurate while you travel.",
           "locationWhenInUsePermission": "Allow WeDeen to use your location to calculate accurate prayer times for your area."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

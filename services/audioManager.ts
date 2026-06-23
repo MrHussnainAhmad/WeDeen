@@ -39,6 +39,11 @@ export async function setActiveAudioVolume(volume: number) {
   await activeSound.setVolumeAsync(Math.max(0, Math.min(1, volume))).catch(() => undefined);
 }
 
+export async function setActiveAudioRate(rate: number) {
+  if (!activeSound) return;
+  await activeSound.setRateAsync(Math.max(0.75, Math.min(1.5, rate)), true).catch(() => undefined);
+}
+
 /**
  * Pause the active sound without tearing it down, so it can be resumed from the
  * same position. Returns true if there was something to pause.
@@ -68,7 +73,7 @@ export async function resumeActiveAudio(): Promise<boolean> {
 
 export async function playManagedAudio(
   source: AVPlaybackSource,
-  options?: { onDidFinish?: () => void; volume?: number }
+  options?: { onDidFinish?: () => void; volume?: number; rate?: number }
 ) {
   await ensureAudioMode();
   activeToken += 1;
@@ -78,6 +83,9 @@ export async function playManagedAudio(
   const initial: Record<string, unknown> = { shouldPlay: true };
   if (typeof options?.volume === 'number') initial.volume = Math.max(0, Math.min(1, options.volume));
   const { sound } = await Audio.Sound.createAsync(source, initial);
+  if (typeof options?.rate === 'number') {
+    await sound.setRateAsync(Math.max(0.75, Math.min(1.5, options.rate)), true).catch(() => undefined);
+  }
   activeSound = sound;
   sound.setOnPlaybackStatusUpdate((status) => {
     if (!status.isLoaded) return;

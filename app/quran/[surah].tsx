@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { FlatList, Pressable, Text, View, StyleSheet, ActivityIndicator, Alert, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -16,6 +16,7 @@ import {
   localFileExists,
   playAudioSequence,
   setActiveReciterForSurah,
+  setGlobalActiveReciter,
   getLocalAyahAudioPath,
   getLocalAudioPath,
   getOrDownloadQuran,
@@ -43,6 +44,11 @@ import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/componen
 import { PressableScale } from '@/components/Anim';
 import { useResponsive } from '@/theme/responsive';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
+import { useThemeStore } from '@/store/themeStore';
+import { parseTajweed, stripTajweedTags, getTajweedColor } from '@/utils/tajweedParser';
+import { TafsirModal } from '@/components/quran/TafsirModal';
+import { getOrDownloadTranslation } from '@/services/quranService';
+import { shareAsText, shareAsImage } from '@/utils/shareHelper';
 import { useHardwareBack } from '@/hooks/useHardwareBack';
 import { goBackOrReplace } from '@/utils/navigation';
 import {
@@ -51,6 +57,8 @@ import {
   queueMemorization,
 } from '@/services/memorizationService';
 import { useAuthStore } from '@/store/authStore';
+import { AchievementManager } from '@/store/achievementStore';
+import { useAudioStore } from '@/store/audioStore';
 
 export default function SurahDetailScreen() {
   const { surah, scrollAyah, returnTo } = useLocalSearchParams<{
@@ -63,6 +71,16 @@ export default function SurahDetailScreen() {
   const themeColors = useThemeColors();
   const styles = useMemo(() => createStyles(themeColors), [themeColors]);
   const listRef = useRef<FlatList>(null);
+  const viewedAyahsRef = useRef<Set<number>>(new Set());
+  const ayahViewabilityConfig = useRef({ itemVisiblePercentThreshold: 70, minimumViewTime: 800 }).current;
+  const onAyahViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: any[] }) => {
+    for (const viewable of viewableItems) {
+      const ayahNumber = Number(viewable.item?.numberInSurah);
+      if (!Number.isFinite(ayahNumber) || viewedAyahsRef.current.has(ayahNumber)) continue;
+      viewedAyahsRef.current.add(ayahNumber);
+      AchievementManager.trackEvent('quran_read', 1).catch(() => undefined);
+    }
+  }).current;
   const surahNumber = Number(surah);
   const scrollAyahTarget = scrollAyah ? Number(scrollAyah) : null;
   const token = useAuthStore((state) => state.token);
@@ -71,7 +89,7 @@ export default function SurahDetailScreen() {
 
   const goBackFromSurah = useCallback(() => {
     if (returnTo === 'memorization') {
-      goBackOrReplace('/(tabs)/memorization');
+      goBackOrReplace('/memorization');
     } else {
       goBackOrReplace('/quran');
     }
@@ -83,16 +101,61 @@ export default function SurahDetailScreen() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [activeAyah, setActiveAyah] = useState<number | null>(null);
-  const [playback, setPlayback] = useState<'idle' | 'playing' | 'paused'>('idle');
+  const [_playback, _setPlayback] = useState<'idle' | 'playing' | 'paused'>('idle');
+  const playback = _playback;
+  
+  const setPlayback = useCallback((state: 'idle' | 'playing' | 'paused') => {
+    _setPlayback(state);
+    if (state === 'idle') {
+      useAudioStore.getState().clearAudioState();
+    } else {
+      // Find reciter name dynamically when state changes
+      let rName = null;
+      useAudioStore.getState().setAudioState({
+        isActive: true,
+        isPlaying: state === 'playing',
+        title: `Surah`, // We will update this later in the effect to avoid stale closures
+        surahNumber: surahNumber,
+      });
+    }
+  }, [surahNumber]);
+
+
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [selectedEdition, setSelectedEdition] = useState('ar.alafasy');
+  const [selectedEdition, setSelectedEdition] = useState('');
   const [showReciterDropdown, setShowReciterDropdown] = useState(false);
+  const [showPlaybackTools, setShowPlaybackTools] = useState(false);
   const [focusModeOn, setFocusModeOn] = useState(false);
   const [focusBusy, setFocusBusy] = useState(false);
   const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
   const [arabicAyahFontSize, setArabicAyahFontSize] = useState(
     uiPreferenceDefaults.arabicAyahFontSize
   );
+  const [showTajweedColors, setShowTajweedColors] = useState(
+    uiPreferenceDefaults.showTajweedColors
+  );
+  const [showTafsirOption, setShowTafsirOption] = useState(
+    uiPreferenceDefaults.showTafsirOption
+  );
+  const [quranPlaybackRate, setQuranPlaybackRate] = useState(
+    uiPreferenceDefaults.quranPlaybackRate
+  );
+  const [quranRepeatCount, setQuranRepeatCount] = useState(
+    uiPreferenceDefaults.quranRepeatCount
+  );
+  const [selectedAyahObject, setSelectedAyahObject] = useState<any>(null);
+  const [tafsirTarget, setTafsirTarget] = useState<{
+    surahNumber: number;
+    ayahNumber: number;
+    surahName: string;
+  } | null>(null);
+  const [shareAyahData, setShareAyahData] = useState<{
+    text: string;
+    translation: string;
+    reference: string;
+  } | null>(null);
+  const shareCardRef = useRef<View>(null);
+  const isDarkMode = useThemeStore((s) => s.colorScheme === 'dark');
   const [memorizedAyahs, setMemorizedAyahs] = useState<Set<number>>(new Set());
   const [memorizationBusy, setMemorizationBusy] = useState<Set<number>>(new Set());
 
@@ -106,6 +169,17 @@ export default function SurahDetailScreen() {
     surahData?.totalAyahs ??
     0;
   const reciters = (recitersQuery.data ?? []).filter((r: any) => r?.identifier && r?.name);
+
+  // Sync title and subtitle to the store when they become available
+  useEffect(() => {
+    if (playback !== 'idle') {
+      const selectedReciter = (recitersQuery.data ?? []).find((r: any) => r?.identifier === selectedEdition);
+      useAudioStore.getState().setAudioState({
+        title: `Surah ${surahData?.englishName || ''}`,
+        subtitle: selectedReciter?.englishName || selectedReciter?.name || 'Recitation',
+      });
+    }
+  }, [playback, surahData?.englishName, selectedEdition, recitersQuery.data]);
 
   useEffect(() => {
     if (!isMemorizationJourney || !token) {
@@ -141,7 +215,13 @@ export default function SurahDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       getUiPreferences()
-        .then((prefs) => setArabicAyahFontSize(prefs.arabicAyahFontSize))
+        .then((prefs) => {
+          setArabicAyahFontSize(prefs.arabicAyahFontSize);
+          setShowTajweedColors(prefs.showTajweedColors);
+          setShowTafsirOption(prefs.showTafsirOption);
+          setQuranPlaybackRate(prefs.quranPlaybackRate);
+          setQuranRepeatCount(prefs.quranRepeatCount);
+        })
         .catch(() => undefined);
       getFavoriteAyahKeys()
         .then(setFavoriteKeys)
@@ -213,6 +293,66 @@ export default function SurahDetailScreen() {
     const keys = await getFavoriteAyahKeys();
     setFavoriteKeys(keys);
     setStatusMessage(starred ? 'Verse saved to favorites.' : 'Removed from favorites.');
+    if (starred) {
+      AchievementManager.trackEvent('quran_favorite', keys.size).catch(() => undefined);
+    }
+  };
+
+  const onShareAyah = (item: any) => {
+    Alert.alert(
+      'Share Verse',
+      'Choose how you want to share this verse:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Share as Plain Text', onPress: () => handleShareText(item) },
+        { text: 'Share as Image', onPress: () => handleShareImage(item) },
+      ]
+    );
+  };
+
+  const handleShareText = async (item: any) => {
+    const plainArabic = stripTajweedTags(item.text);
+    let translation = '';
+    try {
+      const trans = await getOrDownloadTranslation('en');
+      translation = trans?.data?.surahs?.[surahNumber - 1]?.ayahs?.[item.numberInSurah - 1]?.text || '';
+    } catch (e) {
+      // fallback
+    }
+    const ref = `${surahData?.englishName} [${surahNumber}:${item.numberInSurah}]`;
+    const message = `"${plainArabic}"\n\n${translation}\n\n- ${ref}\nShared via WeDeen`;
+    await shareAsText(message, 'Share Verse');
+    AchievementManager.trackEvent('dev_share', 1).catch(() => undefined);
+  };
+
+  const handleShareImage = async (item: any) => {
+    setStatusMessage('Preparing shareable image...');
+    try {
+      const trans = await getOrDownloadTranslation('en');
+      const translation = trans?.data?.surahs?.[surahNumber - 1]?.ayahs?.[item.numberInSurah - 1]?.text || '';
+      const ref = `${surahData?.englishName} [${surahNumber}:${item.numberInSurah}]`;
+      
+      setShareAyahData({
+        text: stripTajweedTags(item.text),
+        translation,
+        reference: ref,
+      });
+
+      setTimeout(async () => {
+        try {
+          await shareAsImage(shareCardRef);
+          AchievementManager.trackEvent('dev_share', 1).catch(() => undefined);
+          setShareAyahData(null);
+          setStatusMessage('');
+        } catch (err) {
+          console.warn(err);
+          setShareAyahData(null);
+          setStatusMessage('Failed to share image.');
+        }
+      }, 500);
+    } catch (e) {
+      setStatusMessage('Failed to prepare translation.');
+    }
   };
 
   const onToggleMemorized = async (ayahNumber: number) => {
@@ -252,10 +392,9 @@ export default function SurahDetailScreen() {
     }
   };
 
-  // Stop playback when leaving the surah so audio doesn't keep going on other screens.
+  // Notice: We removed stopAudio() from unmount so background playback continues.
   useEffect(() => {
     return () => {
-      stopAudio().catch(() => undefined);
       disableQuranFocus().catch(() => undefined);
       restoreRingerFallback().catch(() => undefined);
     };
@@ -305,7 +444,7 @@ export default function SurahDetailScreen() {
 
     if (local) {
       try {
-        await playAudio(local, () => setPlayback('idle'));
+        await playAudio(local, () => setPlayback('idle'), quranPlaybackRate);
         setPlayback('playing');
         return;
       } catch {
@@ -319,13 +458,26 @@ export default function SurahDetailScreen() {
       setPlayback('idle');
       return;
     }
-    await playAudioSequence(ayahUris, () => setPlayback('idle'));
+    await playAudioSequence(
+      ayahUris,
+      () => {
+        setPlayback('idle');
+        AchievementManager.trackEvent('quran_surahs_listened', 1).catch(() => undefined);
+      },
+      quranPlaybackRate
+    );
     setPlayback('playing');
     setStatusMessage('Playing full surah using ayah-by-ayah audio.');
   };
 
   const onPlay = async () => {
-    // While playing, this button acts as "Restart" — begin again from the top.
+    // Require a reciter to be selected before playing
+    if (!selectedEdition) {
+      setShowReciterDropdown(true);
+      setStatusMessage('Please select a reciter first.');
+      return;
+    }
+    // While playing, this button acts as "Restart" -- begin again from the top.
     if (playback === 'playing') {
       await startFromBeginning();
       return;
@@ -378,11 +530,22 @@ export default function SurahDetailScreen() {
     // A single-ayah tap takes over from any full-surah playback.
     setPlayback('idle');
     setActiveAyah(ayahNumber);
+    AchievementManager.trackEvent('quran_listen', 1).catch(() => undefined);
     // Reset the button when this ayah finishes on its own, so it doesn't stay
     // stuck showing the pause icon.
-    await playAudio(localAyah, () =>
-      setActiveAyah((current) => (current === ayahNumber ? null : current))
-    );
+    if (quranRepeatCount > 1) {
+      await playAudioSequence(
+        Array.from({ length: quranRepeatCount }, () => localAyah),
+        () => setActiveAyah((current) => (current === ayahNumber ? null : current)),
+        quranPlaybackRate
+      );
+    } else {
+      await playAudio(
+        localAyah,
+        () => setActiveAyah((current) => (current === ayahNumber ? null : current)),
+        quranPlaybackRate
+      );
+    }
   };
 
   const onSelectReciterForDownload = async (edition: string) => {
@@ -403,6 +566,15 @@ export default function SurahDetailScreen() {
       return;
     }
     await onDownloadAudio(edition);
+  };
+
+  const onUseReciterGlobally = async () => {
+    if (!selectedEdition) {
+      setStatusMessage('Select a reciter first.');
+      return;
+    }
+    await setGlobalActiveReciter(selectedEdition);
+    setStatusMessage('This reciter is now the default for other Surahs.');
   };
 
   return (
@@ -441,6 +613,18 @@ export default function SurahDetailScreen() {
       <View style={styles.controlsContainer}>
         <View style={styles.buttonWrap}>
           <PressableScale
+            onPress={() => {
+              setShowReciterDropdown(false);
+              setShowPlaybackTools(true);
+            }}
+            style={[styles.button, styles.buttonSecondary]}
+          >
+            <Ionicons name="options-outline" size={18} color="#fff" />
+            <Text style={styles.buttonText}>Tools</Text>
+          </PressableScale>
+        </View>
+        <View style={styles.buttonWrap}>
+          <PressableScale
             onPress={() => setShowReciterDropdown((prev) => !prev)}
             disabled={isDownloading || recitersQuery.isLoading || playback === 'playing'}
             style={[
@@ -451,7 +635,7 @@ export default function SurahDetailScreen() {
           >
             <MaterialCommunityIcons name="microphone-outline" size={18} color="#fff" />
             <Text style={styles.buttonText}>
-              {isDownloading ? `${Math.round(downloadProgress * 100)}%` : 'Reciter'}
+              {isDownloading ? `${Math.round(downloadProgress * 100)}%` : selectedEdition ? 'Reciter' : 'Select'}
             </Text>
           </PressableScale>
         </View>
@@ -563,6 +747,8 @@ export default function SurahDetailScreen() {
       <FlatList
         ref={listRef}
         data={surahData?.ayahs ?? []}
+        onViewableItemsChanged={onAyahViewableItemsChanged}
+        viewabilityConfig={ayahViewabilityConfig}
         keyExtractor={(item: any) => `${item.numberInSurah}`}
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
@@ -658,19 +844,241 @@ export default function SurahDetailScreen() {
                   />
                 </Pressable>
               </View>
-              <Text
-                style={[
-                  styles.ayahText,
-                  { fontSize: arabicAyahFontSize, lineHeight: Math.round(arabicAyahFontSize * 1.75) },
-                ]}
+              <Pressable
+                onPress={() => setSelectedAyahObject(item)}
+                style={{ flex: 1 }}
               >
-                {item.text}
-              </Text>
+                <Text
+                  style={[
+                    styles.ayahText,
+                    { fontSize: arabicAyahFontSize, lineHeight: Math.round(arabicAyahFontSize * 1.75) },
+                  ]}
+                >
+                  {showTajweedColors ? (
+                    parseTajweed(item.text).map((span, idx) => (
+                      <Text
+                        key={idx}
+                        style={span.rule ? { color: getTajweedColor(span.rule, isDarkMode) } : undefined}
+                      >
+                        {span.text}
+                      </Text>
+                    ))
+                  ) : (
+                    stripTajweedTags(item.text)
+                  )}
+                </Text>
+              </Pressable>
             </View>
           </View>
         );
         }}
       />
+
+      {/* Playback Tools Bottom Sheet Modal */}
+      <Modal
+        visible={showPlaybackTools}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPlaybackTools(false)}
+      >
+        <View style={styles.bottomSheetBackdrop}>
+          <Pressable style={styles.backdropDismiss} onPress={() => setShowPlaybackTools(false)} />
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>Playback Tools</Text>
+              <PressableScale onPress={() => setShowPlaybackTools(false)} style={styles.closeButtonSmall}>
+                <Ionicons name="close" size={18} color={themeColors.text} />
+              </PressableScale>
+            </View>
+            <GeometricDivider color={themeColors.goldBorder} style={{ marginVertical: 10 }} />
+
+            <View style={styles.playbackToolsContent}>
+              <View style={styles.toolBlock}>
+                <View style={styles.toolHeader}>
+                  <Ionicons name="repeat-outline" size={16} color={themeColors.text} />
+                  <Text style={styles.toolLabel}>Repeat Ayah</Text>
+                </View>
+                <View style={styles.segmentRow}>
+                  {[1, 2, 3, 5].map((count) => (
+                    <PressableScale
+                      key={count}
+                      onPress={() => setQuranRepeatCount(count)}
+                      style={[styles.segmentButton, quranRepeatCount === count && styles.segmentButtonActive]}
+                    >
+                      <Text style={[styles.segmentText, quranRepeatCount === count && styles.segmentTextActive]}>
+                        {count}x
+                      </Text>
+                    </PressableScale>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.toolBlock}>
+                <View style={styles.toolHeader}>
+                  <Ionicons name="play-forward-outline" size={16} color={themeColors.text} />
+                  <Text style={styles.toolLabel}>Audio Speed</Text>
+                </View>
+                <View style={styles.segmentRow}>
+                  {[0.8, 1, 1.25].map((rate) => (
+                    <PressableScale
+                      key={rate}
+                      onPress={() => setQuranPlaybackRate(rate)}
+                      style={[styles.segmentButton, quranPlaybackRate === rate && styles.segmentButtonActive]}
+                    >
+                      <Text style={[styles.segmentText, quranPlaybackRate === rate && styles.segmentTextActive]}>
+                        {rate}x
+                      </Text>
+                    </PressableScale>
+                  ))}
+                </View>
+              </View>
+
+              <PressableScale onPress={onUseReciterGlobally} style={styles.globalReciterButton}>
+                <MaterialCommunityIcons name="earth" size={15} color={themeColors.primary} />
+                <Text style={styles.globalReciterText}>Use selected reciter globally</Text>
+              </PressableScale>
+
+              <PressableScale onPress={() => setShowPlaybackTools(false)} style={[styles.button, styles.buttonPrimary]}>
+                <Text style={styles.buttonText}>Done</Text>
+              </PressableScale>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Ayah Actions Bottom Sheet Modal */}
+      <Modal
+        visible={!!selectedAyahObject}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedAyahObject(null)}
+      >
+        <View style={styles.bottomSheetBackdrop}>
+          <Pressable style={styles.backdropDismiss} onPress={() => setSelectedAyahObject(null)} />
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>Verse {surahNumber}:{selectedAyahObject?.numberInSurah}</Text>
+              <PressableScale onPress={() => setSelectedAyahObject(null)} style={styles.closeButtonSmall}>
+                <Ionicons name="close" size={18} color={themeColors.text} />
+              </PressableScale>
+            </View>
+            <GeometricDivider color={themeColors.goldBorder} style={{ marginVertical: 8 }} />
+            
+            <View style={styles.bottomSheetActions}>
+              <PressableScale
+                onPress={() => {
+                  const num = selectedAyahObject?.numberInSurah;
+                  setSelectedAyahObject(null);
+                  onPlayAyah(num);
+                }}
+                style={styles.actionRow}
+              >
+                <Ionicons
+                  name={activeAyah === selectedAyahObject?.numberInSurah ? 'pause-outline' : 'volume-high-outline'}
+                  size={20}
+                  color={themeColors.primary}
+                />
+                <Text style={styles.actionRowText}>
+                  {activeAyah === selectedAyahObject?.numberInSurah ? 'Pause Recitation' : 'Listen to Ayah'}
+                </Text>
+              </PressableScale>
+
+              <PressableScale
+                onPress={() => {
+                  onToggleFavorite(selectedAyahObject);
+                  setSelectedAyahObject(null);
+                }}
+                style={styles.actionRow}
+              >
+                <Ionicons
+                  name={favoriteKeys.has(`${surahNumber}:${selectedAyahObject?.numberInSurah}`) ? 'star' : 'star-outline'}
+                  size={20}
+                  color={themeColors.gold}
+                />
+                <Text style={styles.actionRowText}>
+                  {favoriteKeys.has(`${surahNumber}:${selectedAyahObject?.numberInSurah}`) ? 'Favorited' : 'Bookmark'}
+                </Text>
+              </PressableScale>
+
+              <PressableScale
+                onPress={() => {
+                  onShareAyah(selectedAyahObject);
+                  setSelectedAyahObject(null);
+                }}
+                style={styles.actionRow}
+              >
+                <Ionicons name="share-social-outline" size={20} color={themeColors.primary} />
+                <Text style={styles.actionRowText}>Share Verse</Text>
+              </PressableScale>
+
+              {showTafsirOption && (
+                <PressableScale
+                  onPress={() => {
+                    setTafsirTarget({
+                      surahNumber,
+                      ayahNumber: Number(selectedAyahObject.numberInSurah),
+                      surahName: surahData?.englishName || 'Surah',
+                    });
+                    setSelectedAyahObject(null);
+                  }}
+                  style={styles.actionRow}
+                >
+                  <Ionicons name="book-outline" size={20} color={themeColors.primary} />
+                  <Text style={styles.actionRowText}>Read Tafsir</Text>
+                </PressableScale>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Tafsir Modal */}
+      <TafsirModal
+        visible={!!tafsirTarget}
+        onClose={() => setTafsirTarget(null)}
+        surahNumber={tafsirTarget?.surahNumber ?? 0}
+        ayahNumber={tafsirTarget?.ayahNumber ?? 0}
+        surahName={tafsirTarget?.surahName ?? ''}
+      />
+
+      {/* Offscreen styled card for view shot */}
+      {shareAyahData && (
+        <View style={styles.hiddenCardContainer}>
+          <View
+            ref={shareCardRef}
+            collapsable={false}
+            style={[
+              styles.hiddenCard,
+              {
+                backgroundColor: isDarkMode ? '#063528' : '#F6F1E7',
+                borderColor: themeColors.gold,
+              },
+            ]}
+          >
+            <StarFieldWatermark rows={3} cols={3} starSize={24} color="rgba(197,155,39,0.04)" />
+            
+            <View style={styles.hiddenCardWatermarkRow}>
+              <Text style={styles.hiddenCardWatermarkText}>WeDeen</Text>
+            </View>
+
+            <Text style={styles.hiddenCardArabicText}>
+              {shareAyahData.text}
+            </Text>
+            
+            <GeometricDivider color={themeColors.gold} style={{ marginVertical: 14 }} />
+            
+            <Text style={styles.hiddenCardTranslationText}>
+              {shareAyahData.translation}
+            </Text>
+
+            <View style={styles.hiddenCardFooter}>
+              <Text style={styles.hiddenCardRefText}>
+                {shareAyahData.reference}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -743,9 +1151,67 @@ const createStyles = (colors: ThemeColors) =>
   },
   controlsContainer: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 16,
+  },
+  playbackToolsContent: {
+    gap: 16,
+  },
+  toolBlock: {
+    gap: 7,
+  },
+  toolHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  toolLabel: {
+    color: colors.text,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  segmentButton: {
+    flex: 1,
+    backgroundColor: colors.cardAlt,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  segmentButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  segmentText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  segmentTextActive: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  globalReciterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    borderRadius: radius.sm,
+    paddingVertical: 10,
+  },
+  globalReciterText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
   },
   buttonWrap: {
     flex: 1,
@@ -1006,5 +1472,116 @@ const createStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 40,
+  },
+  bottomSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(6,53,40,0.5)',
+    justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    flex: 1,
+  },
+  bottomSheetContent: {
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    ...shadow.raised,
+  },
+  bottomSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bottomSheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    fontFamily: fonts.serif,
+  },
+  closeButtonSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bottomSheetActions: {
+    marginTop: 10,
+    gap: 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: colors.cardAlt,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    gap: 12,
+  },
+  actionRowText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  hiddenCardContainer: {
+    position: 'absolute',
+    left: -9999,
+    top: 0,
+    opacity: 0,
+  },
+  hiddenCard: {
+    width: 360,
+    padding: 24,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hiddenCardWatermarkRow: {
+    alignSelf: 'stretch',
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  hiddenCardWatermarkText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.gold,
+    letterSpacing: 1,
+  },
+  hiddenCardArabicText: {
+    fontFamily: fonts.arabic,
+    fontSize: 24,
+    lineHeight: 44,
+    color: colors.primaryDark,
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  hiddenCardTranslationText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.text,
+    textAlign: 'center',
+    fontWeight: '600',
+    marginVertical: 10,
+  },
+  hiddenCardFooter: {
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
+    marginTop: 10,
+  },
+  hiddenCardRefText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.goldDeep,
   },
 });

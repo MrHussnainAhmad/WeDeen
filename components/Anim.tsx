@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, PressableProps, ViewStyle, StyleProp } from 'react-native';
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /**
  * Tab screens: no entrance animation (avoids ghost frames during tab switches).
  */
@@ -104,14 +106,15 @@ export function PressableScale({
     }).start();
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPressIn={() => animate(pressedScale)}
       onPressOut={() => animate(1)}
       onPress={onPress}
       {...rest}
+      style={[style, { transform: [{ scale }] }]}
     >
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
+      {children}
+    </AnimatedPressable>
   );
 }
 

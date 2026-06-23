@@ -6,6 +6,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { forgotPassword, login, me, register } from '@/services/authService';
 import { useAuthStore } from '@/store/authStore';
+import { useAchievementStore } from '@/store/achievementStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark, MihrabArch } from '@/components/IslamicMotifs';
 import { TabFadeInView, PressableScale } from '@/components/Anim';
@@ -45,7 +46,18 @@ export default function ProfileScreen() {
       await setAuth(data.token, profile.user);
       setPassword('');
       setConfirmPassword('');
-      Alert.alert(mode === 'signup' ? 'Signup Successful' : 'Login Successful', mode === 'signup' ? 'Your account is ready.' : 'Welcome back.');
+      Alert.alert(
+        mode === 'signup' ? 'Signup Successful' : 'Login Successful',
+        mode === 'signup' ? 'Your account is ready.' : 'Welcome back.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace('/');
+            }
+          }
+        ]
+      );
     },
     onError: (error: any) => {
       Alert.alert('Request Failed', error?.response?.data?.message || 'Request failed');
@@ -239,6 +251,18 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.profileName}>{user?.name ?? 'User'}</Text>
           <Text style={styles.profileEmail}>{user?.email}</Text>
+          
+          <View style={styles.badgeRow}>
+            <View style={[styles.profileBadge, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+              <Ionicons name="ribbon-outline" size={13} color={colors.gold} />
+              <Text style={styles.badgeText}>{useAchievementStore.getState().rankTitle}</Text>
+            </View>
+            <View style={[styles.profileBadge, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+              <Ionicons name="star" size={11} color={colors.gold} />
+              <Text style={styles.badgeText}>{useAchievementStore.getState().totalXp} XP</Text>
+            </View>
+          </View>
+          
           <GeometricDivider color="rgba(197,155,39,0.5)" style={{ marginTop: 16 }} />
         </View>
       </TabFadeInView>
@@ -263,6 +287,17 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.menuTitle}>Read Quran</Text>
               <Text style={styles.menuSub}>Browse all 114 Surahs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+          </PressableScale>
+
+          <PressableScale onPress={() => router.push('/achievements' as any)} style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: 'rgba(11, 107, 79, 0.1)', borderColor: colors.primaryTint }]}>
+              <Ionicons name="trophy-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuTitle}>Achievements</Text>
+              <Text style={styles.menuSub}>View your badges, ranks & XP</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.faint} />
           </PressableScale>
@@ -360,4 +395,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md, paddingVertical: 14, borderWidth: 1, borderColor: '#F0CFC8', marginTop: 'auto',
   },
   logoutText: { color: colors.danger, fontWeight: '800', fontSize: 14 },
+  badgeRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
+  profileBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
+  badgeText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
 });

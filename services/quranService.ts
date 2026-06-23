@@ -10,13 +10,27 @@ import {
 
 const QURAN_KEY = 'quran_uthmani_full_v1';
 const QURAN_FILE_DIR = `${FileSystem.documentDirectory}quran/`;
-const QURAN_FILE_PATH = `${QURAN_FILE_DIR}quran-uthmani-full-v1.json`;
+const QURAN_FILE_PATH = `${QURAN_FILE_DIR}quran-tajweed-full-v1.json`;
 // Temp target for the streamed first-launch download; promoted to QURAN_FILE_PATH
 // only once the payload validates, so a half-finished download never poisons the cache.
 const QURAN_TMP_PATH = `${QURAN_FILE_DIR}quran-download.tmp`;
 const AUDIO_MAP_KEY = 'surah_audio_paths_v1';
 const AYAH_AUDIO_MAP_KEY = 'ayah_audio_paths_v1';
 const ACTIVE_RECITER_KEY = 'active_reciter_by_surah_v1';
+const GLOBAL_ACTIVE_RECITER_KEY = 'active_reciter_global_v1';
+
+export const POPULAR_RECITERS = [
+  { identifier: 'ar.alafasy', name: 'Mishary Rashid Alafasy', englishName: 'Mishary Rashid Alafasy' },
+  { identifier: 'ar.abdulbasitmurattal', name: 'Abdul Basit', englishName: 'Abdul Basit Murattal' },
+  { identifier: 'ar.abdurrahmaansudais', name: 'Abdul Rahman Al-Sudais', englishName: 'Abdul Rahman Al-Sudais' },
+  { identifier: 'ar.saoodshuraym', name: 'Saud Al-Shuraim', englishName: 'Saud Al-Shuraim' },
+  { identifier: 'ar.husary', name: 'Mahmoud Khalil Al-Husary', englishName: 'Mahmoud Khalil Al-Husary' },
+  { identifier: 'ar.minshawi', name: 'Muhammad Siddiq Al-Minshawi', englishName: 'Muhammad Siddiq Al-Minshawi' },
+  { identifier: 'ar.mahermuaiqly', name: 'Maher Al-Muaiqly', englishName: 'Maher Al-Muaiqly' },
+  { identifier: 'ar.saadalghamdi', name: 'Saad Al-Ghamdi', englishName: 'Saad Al-Ghamdi' },
+  { identifier: 'ar.ahmedajamy', name: 'Ahmed Al-Ajmi', englishName: 'Ahmed Al-Ajmi' },
+  { identifier: 'ar.parhizgar', name: 'Shahriar Parhizgar', englishName: 'Shahriar Parhizgar' },
+];
 
 let activeSurahDownload: FileSystem.DownloadResumable | null = null;
 let activeAyahDownload: FileSystem.DownloadResumable | null = null;
@@ -87,7 +101,7 @@ export type QuranDownloadProgress = {
 // Public Quran source (Uthmani text). Reports Content-Length on GET, so a streamed
 // download yields a real percentage. The backend mirror has no streamable path, so
 // the boot download streams straight from here.
-const QURAN_REMOTE_URL = 'https://api.alquran.cloud/v1/quran/quran-uthmani';
+const QURAN_REMOTE_URL = 'https://api.alquran.cloud/v1/quran/quran-tajweed';
 
 export async function isQuranFileCached() {
   try {
@@ -205,14 +219,14 @@ export async function refreshQuranCacheInBackground() {
 
 async function fetchQuranFromNetwork() {
   try {
-    const { data } = await ummahApi.get('/quran/quran-uthmani', { timeout: 30000 });
+    const { data } = await ummahApi.get('/quran/quran-tajweed', { timeout: 30000 });
     if (isValidQuranPayload(data)) return data;
   } catch (error) {
     console.warn('[Quran] UmmahApi fallback:', error instanceof Error ? error.message : String(error));
     // fall through to public fallback
   }
 
-  const response = await fetch('https://api.alquran.cloud/v1/quran/quran-uthmani', {
+  const response = await fetch('https://api.alquran.cloud/v1/quran/quran-tajweed', {
     timeout: 30000 // Ensure fetch timeout matches API timeout
   } as any);
   if (!response.ok) {
@@ -239,8 +253,17 @@ export function warmQuranCacheInBackground() {
 }
 
 export async function getReciters() {
-  const { data } = await ummahApi.get('/edition?format=audio&language=ar&type=versebyverse');
-  return data?.data ?? [];
+  try {
+    const { data } = await ummahApi.get('/edition?format=audio&language=ar&type=versebyverse');
+    const list = Array.isArray(data?.data) ? data.data : [];
+    const popularIds = new Set(POPULAR_RECITERS.map((r) => r.identifier));
+    const byId = new Map(list.map((item: any) => [item.identifier, item]));
+    const popular = POPULAR_RECITERS.map((fallback) => byId.get(fallback.identifier) ?? fallback);
+    const rest = list.filter((item: any) => !popularIds.has(item.identifier));
+    return [...popular, ...rest];
+  } catch {
+    return POPULAR_RECITERS;
+  }
 }
 
 export async function downloadSurahAudio(surahNumber: number, edition = 'ar.alafasy') {
@@ -443,17 +466,27 @@ export async function setActiveReciterForSurah(surahNumber: number, edition: str
 
 export async function getActiveReciterForSurah(surahNumber: number) {
   const raw = await AsyncStorage.getItem(ACTIVE_RECITER_KEY);
-  if (!raw) return null;
-  const map = JSON.parse(raw) as Record<string, string>;
-  return map?.[`${surahNumber}`] ?? null;
+  if (raw) {
+    const map = JSON.parse(raw) as Record<string, string>;
+    if (map?.[`${surahNumber}`]) return map[`${surahNumber}`];
+  }
+  return getGlobalActiveReciter();
 }
 
-export async function playAudio(uri: string, onDidFinish?: () => void) {
+export async function setGlobalActiveReciter(edition: string) {
+  await AsyncStorage.setItem(GLOBAL_ACTIVE_RECITER_KEY, edition);
+}
+
+export async function getGlobalActiveReciter() {
+  return AsyncStorage.getItem(GLOBAL_ACTIVE_RECITER_KEY);
+}
+
+export async function playAudio(uri: string, onDidFinish?: () => void, rate = 1) {
   sequenceToken += 1;
-  return playManagedAudio({ uri }, onDidFinish ? { onDidFinish } : undefined);
+  return playManagedAudio({ uri }, { onDidFinish, rate });
 }
 
-export async function playAudioSequence(uris: string[], onComplete?: () => void) {
+export async function playAudioSequence(uris: string[], onComplete?: () => void, rate = 1) {
   sequenceToken += 1;
   const currentToken = sequenceToken;
   const validUris = uris.filter(Boolean);
@@ -472,7 +505,7 @@ export async function playAudioSequence(uris: string[], onComplete?: () => void)
     }
     await playManagedAudio(
       { uri: validUris[index] },
-      { onDidFinish: () => void playAt(index + 1).catch(() => undefined) }
+      { rate, onDidFinish: () => void playAt(index + 1).catch(() => undefined) }
     );
   };
 
@@ -507,3 +540,38 @@ export async function pauseAudio() {
 export async function resumeAudio() {
   return resumeActiveAudio();
 }
+
+export const TRANSLATION_EDITIONS: Record<string, string> = {
+  en: 'en.sahih',
+  ur: 'ur.junagarhi',
+  tr: 'tr.ates',
+  fr: 'fr.hamidullah',
+  ar: 'ar.muyassar',
+};
+
+export async function getOrDownloadTranslation(lang: string) {
+  const edition = TRANSLATION_EDITIONS[lang] || 'en.sahih';
+  const filePath = `${QURAN_FILE_DIR}translation-${edition}.json`;
+  try {
+    const info = await FileSystem.getInfoAsync(filePath);
+    if (info.exists) {
+      const raw = await FileSystem.readAsStringAsync(filePath);
+      return JSON.parse(raw);
+    }
+  } catch {
+    // ignore read error
+  }
+
+  try {
+    const response = await fetch(`https://api.alquran.cloud/v1/quran/${edition}`);
+    if (!response.ok) throw new Error('FETCH_FAILED');
+    const json = await response.json();
+    await FileSystem.makeDirectoryAsync(QURAN_FILE_DIR, { intermediates: true }).catch(() => undefined);
+    await FileSystem.writeAsStringAsync(filePath, JSON.stringify(json));
+    return json;
+  } catch (error) {
+    console.warn('[QuranService] Failed to download translation:', edition, error);
+    return null;
+  }
+}
+

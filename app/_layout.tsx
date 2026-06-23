@@ -4,6 +4,8 @@ import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { Asset } from 'expo-asset';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, AppState, Easing, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
@@ -34,12 +36,17 @@ import { ringAdhan } from '@/services/adhanController';
 import { maybeRefreshLocation } from '@/services/locationService';
 import { ensureBackgroundLocationRegistered } from '@/services/backgroundLocation';
 import { AdhanAlarmModal } from '@/components/AdhanAlarmModal';
+import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
 import { AppLogo } from '@/components/AppLogo';
 import { subscribePrayerFocus, refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
 import { syncMemorizationQueueThrottled } from '@/services/memorizationService';
+import { useAchievementStore, AchievementManager } from '@/store/achievementStore';
+import { ACHIEVEMENT_IMAGES } from '@/utils/achievementImages';
+import * as FileSystem from 'expo-file-system/legacy';
+import { markPrayerAsPrayed } from '@/services/prayerTrackerService';
 
 function openPrayerLockTab() {
-  router.push('/(tabs)/prayer-lock' as any);
+  router.push('/prayer-lock' as any);
 }
 
 const SAVED_LOCATION_KEY = 'timings_location_v1';
@@ -110,7 +117,9 @@ export default function RootLayout() {
     NotoNastaliqUrdu: require('@/assets/fonts/NotoNastaliqUrdu-Regular.ttf'),
     NotoSans: require('@/assets/fonts/NotoSans-Regular.ttf'),
     NotoSerif: require('@/assets/fonts/NotoSerif-Regular.ttf'),
-    Lora: require('@/assets/fonts/Lora-Regular.ttf')
+    Lora: require('@/assets/fonts/Lora-Regular.ttf'),
+    ...Ionicons.font,
+    ...MaterialCommunityIcons.font,
   });
 
   useEffect(() => {
@@ -126,6 +135,7 @@ export default function RootLayout() {
       const [shouldRun, ask] = await Promise.all([
         shouldRunBootPreload().catch(() => false),
         shouldAskHadithPredownload().catch(() => false),
+        Asset.loadAsync(Object.values(ACHIEVEMENT_IMAGES)).catch(() => undefined),
       ]);
       if (mounted) setBootFlags({ shouldRun, ask });
     })();
@@ -139,6 +149,42 @@ export default function RootLayout() {
     return subscribePrayerFocus(() => undefined);
   }, []);
 
+  // Sync widget offline actions
+  useEffect(() => {
+    const checkWidgetActions = async () => {
+      try {
+        const path = `${FileSystem.documentDirectory}pending_widget_actions.json`;
+        const info = await FileSystem.getInfoAsync(path);
+        if (info.exists) {
+          const content = await FileSystem.readAsStringAsync(path);
+          const actions = JSON.parse(content);
+          if (Array.isArray(actions) && actions.length > 0) {
+            for (const action of actions) {
+              if (action.prayer && action.date) {
+                await markPrayerAsPrayed(
+                  action.prayer as any,
+                  action.date,
+                  useAuthStore.getState().token,
+                  useAuthStore.getState().user?.id
+                );
+                AchievementManager.trackEvent('dev_widget', 1).catch(() => undefined);
+              }
+            }
+          }
+          await FileSystem.deleteAsync(path, { idempotent: true });
+        }
+      } catch (err) {
+        // silently fail
+      }
+    };
+
+    checkWidgetActions();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkWidgetActions();
+    });
+    return () => sub.remove();
+  }, []);
+
   // Sync offline memorization marks when the app returns to the foreground (throttled).
   useEffect(() => {
     if (!token || !userId) return;
@@ -148,6 +194,18 @@ export default function RootLayout() {
     });
     return () => sub.remove();
   }, [token, userId]);
+  
+  // Hydrate and sync achievements
+  useEffect(() => {
+    const store = useAchievementStore.getState();
+    store
+      .hydrateAchievements(userId || null)
+      .then(() => AchievementManager.trackEvent('dev_open', 1))
+      .catch(() => undefined);
+    if (token && userId) {
+      store.syncWithBackend(token, userId).catch(() => undefined);
+    }
+  }, [userId, token]);
 
   // Finish Quran download quietly if a prior launch sent the user home early.
   useEffect(() => {
@@ -482,9 +540,10 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="quran/index" options={{ title: 'Quran Surahs' }} />
+        <Stack.Screen name="hub" options={{ headerShown: false }} />
+        <Stack.Screen name="quran/index" options={{ headerShown: false, title: 'Quran Surahs' }} />
         <Stack.Screen name="quran/[surah]" options={{ headerShown: false, animation: 'slide_from_right', animationDuration: 320 }} />
-        <Stack.Screen name="hadith/index" options={{ title: 'Hadith Books' }} />
+        <Stack.Screen name="hadith/index" options={{ headerShown: false, title: 'Hadith Books' }} />
         <Stack.Screen name="hadith/[book]/index" options={{ title: 'Hadith' }} />
         <Stack.Screen name="hadith/[book]/[section]" options={{ title: 'Hadith' }} />
         <Stack.Screen name="qibla" options={{ title: 'Qibla Compass' }} />
@@ -493,8 +552,17 @@ export default function RootLayout() {
         <Stack.Screen name="reset-password" options={{ title: 'Reset Password' }} />
         <Stack.Screen name="salah-focus" options={{ title: 'Prayer Lock Setup' }} />
         <Stack.Screen name="blocked" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
+        <Stack.Screen name="tasbih" options={{ headerShown: false, title: 'Tasbih Counter' }} />
+        <Stack.Screen name="zakat" options={{ headerShown: false, title: 'Zakat Calculator' }} />
+        <Stack.Screen name="places" options={{ headerShown: false, title: 'Halal & Mosque Finder' }} />
+        <Stack.Screen name="ramadan" options={{ headerShown: false, title: 'Ramadan & Fasting' }} />
+        <Stack.Screen name="duas" options={{ headerShown: false, title: 'Duas & Azkar' }} />
+        <Stack.Screen name="prayer-tracker" options={{ title: 'My Prayers' }} />
+        <Stack.Screen name="achievements" options={{ headerShown: false, title: 'Achievements' }} />
+        <Stack.Screen name="favorite-ayahs" options={{ headerShown: false, title: 'Favorite Ayahs' }} />
       </Stack>
       <AdhanAlarmModal />
+      <AchievementUnlockModal />
       <HadithPredownloadPrompt
         visible={showHadithPrompt}
         onYes={handleHadithYes}

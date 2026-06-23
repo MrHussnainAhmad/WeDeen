@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -15,7 +15,9 @@ import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
 import { GeometricDivider } from '@/components/IslamicMotifs';
 
 import { GreetingHeader } from '@/components/home/GreetingHeader';
+import { RamadanBanner } from '@/components/home/RamadanBanner';
 import { PrayerCard } from '@/components/home/PrayerCard';
+import { MyPrayersCard } from '@/components/home/MyPrayersCard';
 import { FavoriteVersesCard } from '@/components/home/FavoriteVersesCard';
 import { QuickActions } from '@/components/home/QuickActions';
 import { VerseCard } from '@/components/home/VerseCard';
@@ -43,6 +45,31 @@ export default function HomeScreen() {
   }, []);
 
   const prayer = usePrayerSnapshot(nowTick);
+
+  // Pre-fetch and update Ramadan fasting times (Sehri & Iftar) every day at 12:00 AM (midnight)
+  // or on app launch/resume when the user is in the Ramadan month.
+  const lastPrefetchDate = useRef<string | null>(null);
+
+  useEffect(() => {
+    const loc = prayer.location;
+    if (!loc) return;
+
+    // Check if it is the Ramadan month (Hijri month 9)
+    const isRamadan = data?.hijriMonthNumber === 9;
+    if (!isRamadan) return;
+
+    const todayStr = new Date(nowTick).toDateString(); // changes precisely at 12:00 AM midnight
+    if (lastPrefetchDate.current !== todayStr) {
+      lastPrefetchDate.current = todayStr;
+
+      // Lazy import the service function to keep app startup lightweight
+      import('@/services/ramadanService')
+        .then(({ preloadRamadanFastingTimes }) => {
+          preloadRamadanFastingTimes(loc).catch(() => undefined);
+        })
+        .catch(() => undefined);
+    }
+  }, [prayer.location, data?.hijriMonthNumber, nowTick]);
 
   const [use24HourTime, setUse24HourTime] = useState(uiPreferenceDefaults.use24HourTime);
   useFocusEffect(
@@ -97,6 +124,11 @@ export default function HomeScreen() {
         <GreetingHeader name={user?.name} hour={greetingHour} />
       </TabFadeInView>
 
+      {/* Ramadan Dashboard Banner */}
+      <TabFadeInView style={styles.section}>
+        <RamadanBanner location={prayer.location} nowTick={nowTick} />
+      </TabFadeInView>
+
       {/* Prayer hero */}
       <TabFadeInView style={styles.section}>
         <PrayerCard
@@ -109,6 +141,13 @@ export default function HomeScreen() {
           onEnableLocation={prayer.enableLocation}
         />
       </TabFadeInView>
+
+      {/* My Prayers Card (Logged In only) */}
+      {user ? (
+        <TabFadeInView style={styles.section}>
+          <MyPrayersCard />
+        </TabFadeInView>
+      ) : null}
 
       {/* Quick actions */}
       <TabFadeInView style={styles.section}>

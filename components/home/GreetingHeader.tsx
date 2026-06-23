@@ -54,13 +54,23 @@ export const GreetingHeader = React.memo(function GreetingHeader({
       fontFamily: fonts.serif,
       letterSpacing: 0.2,
     },
-    name: { color: colors.primary },
-    arabic: {
+    userName: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '700',
+      marginTop: 4,
+    },
+    right: {
+      alignItems: 'flex-end',
+      gap: 6,
+    },
+    arabicRight: {
       fontFamily: fonts.arabic,
       color: colors.muted,
       fontSize: 17,
-      lineHeight: 30,
-      marginTop: 3,
+      lineHeight: 26,
+      textAlign: 'right',
+      marginTop: 2,
     },
     actions: { flexDirection: 'row', gap: 8 },
     iconBtn: {
@@ -83,35 +93,35 @@ export const GreetingHeader = React.memo(function GreetingHeader({
           <Text style={styles.eyebrowText}>{part.en.toUpperCase()}</Text>
         </View>
         <Text style={styles.greeting} numberOfLines={1}>
-          {firstName ? (
-            <>
-              {'Assalamu ʿalaikum, '}
-              <Text style={styles.name}>{firstName}</Text>
-            </>
-          ) : (
-            'Assalamu ʿalaikum'
-          )}
+          Assalamu ʿalaikum
         </Text>
-        <Text style={styles.arabic}>{'السَّلامُ عَلَيْكُم'}</Text>
+        {name ? (
+          <Text style={styles.userName} numberOfLines={1}>
+            {name}
+          </Text>
+        ) : null}
       </View>
 
-      <View style={styles.actions}>
-        <PressableScale
-          onPress={() => toggleColorScheme()}
-          style={styles.iconBtn}
-          accessibilityLabel={colorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          <Ionicons
-            name={colorScheme === 'dark' ? 'sunny-outline' : 'moon-outline'}
-            size={20}
-            color={colors.primary}
-          />
-        </PressableScale>
-        <Link href="/settings" asChild>
-          <PressableScale style={styles.iconBtn} accessibilityLabel="Open settings">
-            <Ionicons name="settings-outline" size={20} color={colors.primary} />
+      <View style={styles.right}>
+        <View style={styles.actions}>
+          <PressableScale
+            onPress={() => toggleColorScheme()}
+            style={styles.iconBtn}
+            accessibilityLabel={colorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <Ionicons
+              name={colorScheme === 'dark' ? 'sunny-outline' : 'moon-outline'}
+              size={20}
+              color={colors.primary}
+            />
           </PressableScale>
-        </Link>
+          <Link href="/settings" asChild>
+            <PressableScale style={styles.iconBtn} accessibilityLabel="Open settings">
+              <Ionicons name="settings-outline" size={20} color={colors.primary} />
+            </PressableScale>
+          </Link>
+        </View>
+        <Text style={styles.arabicRight}>{'السَّلامُ عَلَيْكُم'}</Text>
       </View>
     </View>
   );

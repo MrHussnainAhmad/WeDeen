@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { me } from '@/services/authService';
 import { syncMemorizationQueueThrottled, cacheLearningProgress } from '@/services/memorizationService';
+import { syncSalahQueue, restoreSalahHistory } from '@/services/prayerTrackerService';
+import { syncTasbihQueue, restoreTasbihHistory } from '@/services/tasbihService';
+import { syncFavorites, restoreFavorites } from '@/services/favoriteAyahService';
+import { restoreDuaProgress, syncDuaProgress } from '@/services/duaLibraryService';
+import { restoreFastingLogs, syncFastingLogs } from '@/services/ramadanService';
+import { restoreFavoritePlaces, syncFavoritePlaces } from '@/services/placesService';
+import { restoreZakatHistory, syncZakatHistory } from '@/services/zakatService';
+import { useAchievementStore } from '@/store/achievementStore';
 import { clearToken, clearUser, getToken, getUser, saveToken, saveUser } from '@/utils/secure';
 import type { User } from '@/types';
 
@@ -26,10 +34,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }).catch(() => undefined);
     }
     syncMemorizationQueueThrottled(token, user.id, { force: true }).catch(() => undefined);
+    
+    // Background sync other services
+    syncSalahQueue(token, user.id).then(() => restoreSalahHistory(token)).catch(() => undefined);
+    syncTasbihQueue(token, user.id).then(() => restoreTasbihHistory(token)).catch(() => undefined);
+    syncFavorites(token).then(() => restoreFavorites(token)).catch(() => undefined);
+    syncZakatHistory(token).then(() => restoreZakatHistory(token)).catch(() => undefined);
+    syncFastingLogs(token).then(() => restoreFastingLogs(token)).catch(() => undefined);
+    syncFavoritePlaces(token).then(() => restoreFavoritePlaces(token)).catch(() => undefined);
+    syncDuaProgress(token).then(() => restoreDuaProgress(token)).catch(() => undefined);
+    
+    const achStore = useAchievementStore.getState();
+    achStore.hydrateAchievements(user.id).then(() => achStore.syncWithBackend(token, user.id)).catch(() => undefined);
   },
   logout: async () => {
     await Promise.all([clearToken(), clearUser()]);
     set({ token: null, user: null });
+    useAchievementStore.getState().resetAchievements().catch(() => undefined);
   },
   // Restore the session optimistically: the cached token + user come straight
   // from local storage, so the logged-in UI shows instantly on launch (no wait
@@ -59,6 +80,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }).catch(() => undefined);
       }
       syncMemorizationQueueThrottled(token, profile.user.id, { force: true }).catch(() => undefined);
+      
+      syncSalahQueue(token, profile.user.id).then(() => restoreSalahHistory(token)).catch(() => undefined);
+      syncTasbihQueue(token, profile.user.id).then(() => restoreTasbihHistory(token)).catch(() => undefined);
+      syncFavorites(token).then(() => restoreFavorites(token)).catch(() => undefined);
+      syncZakatHistory(token).then(() => restoreZakatHistory(token)).catch(() => undefined);
+      syncFastingLogs(token).then(() => restoreFastingLogs(token)).catch(() => undefined);
+      syncFavoritePlaces(token).then(() => restoreFavoritePlaces(token)).catch(() => undefined);
+      syncDuaProgress(token).then(() => restoreDuaProgress(token)).catch(() => undefined);
+      useAchievementStore.getState().syncWithBackend(token, profile.user.id).catch(() => undefined);
     } catch (err: any) {
       const status = err?.response?.status;
       // Only sign out when the server explicitly rejects the token. Network

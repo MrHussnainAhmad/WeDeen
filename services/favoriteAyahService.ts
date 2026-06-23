@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './http';
 
 const STORAGE_KEY = 'wedeen_favorite_ayahs_v1';
 const MAX_FAVORITES = 100;
@@ -73,4 +74,41 @@ export async function toggleFavoriteAyah(entry: Omit<FavoriteAyah, 'savedAt'>): 
   }
   const favorites = await addFavoriteAyah(entry);
   return { favorites, starred: true };
+}
+
+export async function syncFavorites(token: string) {
+  try {
+    const list = await getFavoriteAyahs();
+    if (list.length === 0) return;
+    await api.post('/sync/favorites', { items: list }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch (err) {
+    console.error('Failed to sync favorites:', err);
+  }
+}
+
+export async function restoreFavorites(token: string): Promise<FavoriteAyah[]> {
+  try {
+    const { data } = await api.get<{ items: FavoriteAyah[] }>('/sync/favorites', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (data && Array.isArray(data.items)) {
+      const localList = await getFavoriteAyahs();
+      const mergedMap = new Map<string, FavoriteAyah>();
+      for (const item of [...localList, ...data.items]) {
+        const itemKey = `${item.surahNumber}:${item.ayahNumber}`;
+        const existing = mergedMap.get(itemKey);
+        if (!existing || item.savedAt > existing.savedAt) {
+          mergedMap.set(itemKey, item);
+        }
+      }
+      const mergedList = Array.from(mergedMap.values()).sort((a, b) => b.savedAt - a.savedAt);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mergedList));
+      return mergedList;
+    }
+  } catch (err) {
+    console.error('Failed to restore favorites:', err);
+  }
+  return getFavoriteAyahs();
 }

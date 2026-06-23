@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { useAuthStore } from '@/store/authStore';
+import { markPrayerAsPrayed, getTodayStr } from './prayerTrackerService';
 import {
   getActivePrayerWindow,
   gregorianKey,
@@ -390,6 +392,14 @@ export async function markSalahFocusPrayerComplete(prayer: PrayerLabel) {
   await saveSalahFocusConfig({
     completedByDate: { ...config.completedByDate, [dateKey]: existing },
   });
+
+  try {
+    const { token, user } = useAuthStore.getState();
+    const todayYMD = getTodayStr(now);
+    await markPrayerAsPrayed(prayer, todayYMD, token, user?.id);
+  } catch (err) {
+    console.error('Failed to log prayer in tracker:', err);
+  }
 
   await clearEmergencyUnlockState();
   await deactivateBlocking();
