@@ -23,6 +23,15 @@ export async function forgotPassword(payload: { email: string }) {
   return data;
 }
 
+export async function resetPassword(payload: {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+}) {
+  const { data } = await api.post<{ success: boolean }>('/auth/reset-password', payload);
+  return data;
+}
+
 export async function updatePassword(token: string, payload: { currentPassword: string; newPassword: string; confirmPassword: string }) {
   const { data } = await api.put<{ success: boolean }>('/auth/password', payload, {
     headers: { Authorization: `Bearer ${token}` }

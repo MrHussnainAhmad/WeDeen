@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PREFS_KEY = 'wedeen_ui_preferences_v1';
 
+export type ColorScheme = 'light' | 'dark';
+
 export type UiPreferences = {
   arabicAyahFontSize: number;
   use24HourTime: boolean;
@@ -10,6 +12,10 @@ export type UiPreferences = {
   adhanVolume: number;
   /** Opt-in: update location in the background so adhan stays accurate while traveling. */
   backgroundLocationEnabled: boolean;
+  /** Manual light/dark theme (not system auto). */
+  colorScheme: ColorScheme;
+  /** Gradually lower screen brightness at night while the app is open. */
+  nightBrightnessEnabled: boolean;
 };
 
 const DEFAULT_PREFERENCES: UiPreferences = {
@@ -18,6 +24,8 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   adhanAlertsEnabled: true,
   adhanVolume: 1,
   backgroundLocationEnabled: false,
+  colorScheme: 'light',
+  nightBrightnessEnabled: true,
 };
 
 export async function getUiPreferences(): Promise<UiPreferences> {
@@ -45,6 +53,14 @@ export async function getUiPreferences(): Promise<UiPreferences> {
         typeof parsed.backgroundLocationEnabled === 'boolean'
           ? parsed.backgroundLocationEnabled
           : DEFAULT_PREFERENCES.backgroundLocationEnabled,
+      colorScheme:
+        parsed.colorScheme === 'dark' || parsed.colorScheme === 'light'
+          ? parsed.colorScheme
+          : DEFAULT_PREFERENCES.colorScheme,
+      nightBrightnessEnabled:
+        typeof parsed.nightBrightnessEnabled === 'boolean'
+          ? parsed.nightBrightnessEnabled
+          : DEFAULT_PREFERENCES.nightBrightnessEnabled,
     };
   } catch {
     return DEFAULT_PREFERENCES;

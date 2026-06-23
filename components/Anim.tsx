@@ -2,6 +2,19 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, PressableProps, ViewStyle, StyleProp } from 'react-native';
 
 /**
+ * Tab screens: no entrance animation (avoids ghost frames during tab switches).
+ */
+export function TabFadeInView({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
+/**
  * Entrance animation: fade + slide up. Use `index` to stagger a list of cards.
  * Pure RN Animated (native driver) — no reanimated/babel changes required.
  */
@@ -12,6 +25,7 @@ export function FadeInView({
   offset = 16,
   duration = 460,
   style,
+  disabled = false,
 }: {
   children: React.ReactNode;
   index?: number;
@@ -19,12 +33,14 @@ export function FadeInView({
   offset?: number;
   duration?: number;
   style?: StyleProp<ViewStyle>;
+  /** Skip entrance motion (e.g. tab screens that remount during transitions). */
+  disabled?: boolean;
 }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  const didAnimate = useRef(false);
+  const progress = useRef(new Animated.Value(disabled ? 1 : 0)).current;
+  const didAnimate = useRef(disabled);
 
   useEffect(() => {
-    if (didAnimate.current) {
+    if (disabled || didAnimate.current) {
       progress.setValue(1);
       return;
     }
@@ -39,7 +55,7 @@ export function FadeInView({
     });
     t.start();
     return () => t.stop();
-  }, [progress, delay, index, duration]);
+  }, [progress, delay, index, duration, disabled]);
 
   return (
     <Animated.View

@@ -8,11 +8,14 @@ export default function TabsLayout() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Tabs
         initialRouteName="index"
+        backBehavior="none"
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          lazy: true,
-          animation: 'fade',
+          lazy: false,
+          // No cross-fade/shift — both caused the previous tab to bleed through.
+          animation: 'none',
+          freezeOnBlur: true,
           sceneStyle: { backgroundColor: colors.bg },
         }}
       >

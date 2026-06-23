@@ -16,7 +16,8 @@ import {
   GeometricDivider,
   StarFieldWatermark,
 } from '@/components/IslamicMotifs';
-import { FadeInView, PressableScale, useBreathing } from '@/components/Anim';
+import { TabFadeInView, PressableScale, useBreathing } from '@/components/Anim';
+import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
 import { OrnateCard } from '@/components/ui';
 import {
   getSalahFocusConfig,
@@ -140,21 +141,24 @@ export default function PrayerLockScreen() {
 
   if (!supported) {
     return (
+      <TabSceneGuard>
       <View style={[styles.screen, styles.centered, { paddingTop: topPad }]}>
         <Ionicons name="lock-closed-outline" size={44} color={colors.primary} />
         <Text style={styles.heroTitle}>Prayer Lock</Text>
         <Text style={styles.mutedCenter}>{getSalahFocusExpoGoMessage()}</Text>
       </View>
+      </TabSceneGuard>
     );
   }
 
   return (
+    <TabSceneGuard>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, { paddingTop: topPad, paddingBottom: insets.bottom + 110 }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
-      <FadeInView index={0}>
+      <TabFadeInView>
         <View style={styles.header}>
           <StarFieldWatermark rows={2} cols={5} starSize={18} color="rgba(15,61,46,0.04)" />
           <View style={styles.headerIcon}>
@@ -171,10 +175,10 @@ export default function PrayerLockScreen() {
               : 'Stay present when the adhan calls.'}
           </Text>
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
       {!hasLocation ? (
-        <FadeInView index={1}>
+        <TabFadeInView>
           <OrnateCard index={0}>
             <View style={styles.locationWarn}>
               <Ionicons name="location-outline" size={22} color={colors.primary} />
@@ -187,10 +191,10 @@ export default function PrayerLockScreen() {
               </PressableScale>
             </View>
           </OrnateCard>
-        </FadeInView>
+        </TabFadeInView>
       ) : null}
 
-      <FadeInView index={1}>
+      <TabFadeInView>
         <View style={[styles.heroCard, isLocked ? styles.heroCardLocked : styles.heroCardIdle]}>
           {isLocked ? (
             <>
@@ -236,10 +240,10 @@ export default function PrayerLockScreen() {
             </>
           )}
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
       {isLocked ? (
-        <FadeInView index={2}>
+        <TabFadeInView>
           <PressableScale
             onPress={onPrayed}
             disabled={submitting}
@@ -257,10 +261,10 @@ export default function PrayerLockScreen() {
           <Text style={styles.prayedFootnote}>
             Apps unlock automatically when the prayer window ends, or tap above when you have prayed.
           </Text>
-        </FadeInView>
+        </TabFadeInView>
       ) : null}
 
-      <FadeInView index={3}>
+      <TabFadeInView>
         <OrnateCard index={0}>
           <View style={styles.statRow}>
             <View style={styles.statItem}>
@@ -298,8 +302,9 @@ export default function PrayerLockScreen() {
             </PressableScale>
           )}
         </OrnateCard>
-      </FadeInView>
+      </TabFadeInView>
     </ScrollView>
+    </TabSceneGuard>
   );
 }
 

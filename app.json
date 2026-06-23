@@ -5,15 +5,15 @@
     "scheme": "wedeen",
     "version": "1.0.1",
     "orientation": "default",
+    "platforms": [
+      "android"
+    ],
     "userInterfaceStyle": "light",
     "icon": "./assets/images/icon.png",
     "splash": {
       "image": "./assets/images/logo-splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#F8F5EF"
-    },
-    "ios": {
-      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +33,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -62,6 +62,9 @@
             "overlay": {
               "icon": "./assets/images/logo-mark.png"
             }
+          },
+          "ios": {
+            "enabled": false
           }
         }
       ],
@@ -90,137 +93,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "85ffb8ad-67e0-40b6-abe8-c56f750d455f",
-        "build": {
-          "experimental": {
-            "ios": {
-              "appExtensions": [
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldConfiguration",
-                  "targetName": "ShieldConfiguration",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldAction",
-                  "targetName": "ShieldAction",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.DeviceActivityMonitor",
-                  "targetName": "DeviceActivityMonitor",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldConfiguration",
-                  "targetName": "ShieldConfiguration",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldAction",
-                  "targetName": "ShieldAction",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.DeviceActivityMonitor",
-                  "targetName": "DeviceActivityMonitor",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldConfiguration",
-                  "targetName": "ShieldConfiguration",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldAction",
-                  "targetName": "ShieldAction",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.DeviceActivityMonitor",
-                  "targetName": "DeviceActivityMonitor",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldConfiguration",
-                  "targetName": "ShieldConfiguration",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.ShieldAction",
-                  "targetName": "ShieldAction",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                },
-                {
-                  "bundleIdentifier": "com.example.wedeen.DeviceActivityMonitor",
-                  "targetName": "DeviceActivityMonitor",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.expo.app-blocker"
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        }
+        "projectId": "c338265b-6aad-4f74-85af-2871fa5c2509"
       }
     },
-    "owner": "aassddffass"
+    "owner": "hussnainahmadsahi"
   }
 }

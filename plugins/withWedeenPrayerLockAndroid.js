@@ -26,6 +26,9 @@ function withWedeenPrayerLockAndroid(config) {
     if (!perms.some((p) => p.$?.['android:name'] === 'android.permission.QUERY_ALL_PACKAGES')) {
       perms.push({ $: { 'android:name': 'android.permission.QUERY_ALL_PACKAGES' } });
     }
+    if (!perms.some((p) => p.$?.['android:name'] === 'android.permission.ACCESS_NOTIFICATION_POLICY')) {
+      perms.push({ $: { 'android:name': 'android.permission.ACCESS_NOTIFICATION_POLICY' } });
+    }
 
     if (!manifest.manifest.queries) {
       manifest.manifest.queries = [];

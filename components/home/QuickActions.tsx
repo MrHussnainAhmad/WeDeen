@@ -48,7 +48,7 @@ const ACTIONS: Action[] = [
     tone: 'gold',
   },
   {
-    href: '/hijri',
+    href: '/(tabs)/hijri',
     title: 'Calendar',
     arabic: 'التقويم',
     subtitle: 'Hijri & timings',

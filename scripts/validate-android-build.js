@@ -85,7 +85,7 @@ console.log('[validate:android] Compiling :expo-app-blocker:compileReleaseKotlin
 const gradleStatus = run(
   gradlew,
   [':expo-app-blocker:compileReleaseKotlin'],
-  { cwd: androidDir, allowFail: true }
+  { cwd: androidDir }
 );
 if (gradleStatus === 0) {
   console.log('[validate:android] OK — TypeScript, patches, and Kotlin compile passed.');

@@ -50,7 +50,7 @@ function normalizeTime(raw?: string) {
 }
 
 function getLocationCacheKey(loc: SavedLocation) {
-  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
+  if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
     return `coords_${loc.latitude.toFixed(4)}_${loc.longitude.toFixed(4)}`;
   }
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
@@ -171,7 +171,7 @@ export function usePrayerSnapshot(nowTick: number) {
       const date = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
       const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`;
       const url =
-        location.mode === 'coords' && location.latitude && location.longitude
+        location.mode === 'coords' && location.latitude != null && location.longitude != null
           ? `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=2`
           : `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=2`;
 

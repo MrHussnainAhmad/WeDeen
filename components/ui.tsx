@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, StyleProp, TextStyle } from 'react-native';
 import { colors, radius, shadow, fonts } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark, CornerFlourish } from './IslamicMotifs';
-import { FadeInView } from './Anim';
 
 /**
  * Full-screen warm paper background with a faint geometric texture at the top.
@@ -87,9 +86,6 @@ export function OrnateCard({
       {children}
     </View>
   );
-  if (typeof index === 'number') {
-    return <FadeInView index={index}>{inner}</FadeInView>;
-  }
   return inner;
 }
 

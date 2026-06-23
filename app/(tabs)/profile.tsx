@@ -8,9 +8,11 @@ import { forgotPassword, login, me, register } from '@/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark, MihrabArch } from '@/components/IslamicMotifs';
-import { FadeInView, PressableScale } from '@/components/Anim';
+import { TabFadeInView, PressableScale } from '@/components/Anim';
+import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
 import { OrnateCard } from '@/components/ui';
 import { useResponsive } from '@/theme/responsive';
+import { BannerAdSpace } from '@/components/BannerAdSpace';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -58,6 +60,7 @@ export default function ProfileScreen() {
 
   if (!token) {
     return (
+      <TabSceneGuard>
       <KeyboardAvoidingView
         style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -77,7 +80,7 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         >
-          <FadeInView index={0}>
+          <TabFadeInView>
             <View style={styles.authHero}>
               <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
               <View style={styles.heroArchWrap}>
@@ -114,9 +117,9 @@ export default function ProfileScreen() {
                 </PressableScale>
               </View>
             </View>
-          </FadeInView>
+          </TabFadeInView>
 
-          <FadeInView index={1}>
+          <TabFadeInView>
             <OrnateCard style={styles.authMainCard} flourish>
               <Text style={styles.cardTitle}>{mode === 'signup' ? 'Account Details' : 'Sign In Details'}</Text>
               <GeometricDivider color={colors.goldBorder} style={{ marginBottom: 14 }} />
@@ -206,21 +209,25 @@ export default function ProfileScreen() {
                 </Text>
               </PressableScale>
             </OrnateCard>
-          </FadeInView>
+          </TabFadeInView>
+
+          <BannerAdSpace />
         </ScrollView>
       </KeyboardAvoidingView>
+      </TabSceneGuard>
     );
   }
 
   const initial = (user?.name?.[0] || 'U').toUpperCase();
 
   return (
+    <TabSceneGuard>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
-      <FadeInView index={0}>
+      <TabFadeInView>
         <View style={styles.profileHero}>
           <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
           <View style={styles.heroGoldTop} />
@@ -234,9 +241,9 @@ export default function ProfileScreen() {
           <Text style={styles.profileEmail}>{user?.email}</Text>
           <GeometricDivider color="rgba(197,155,39,0.5)" style={{ marginTop: 16 }} />
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
-      <FadeInView index={1}>
+      <TabFadeInView>
         <View style={styles.menuList}>
           <PressableScale onPress={() => router.push('/settings')} style={styles.menuItem}>
             <View style={[styles.menuIcon, { backgroundColor: colors.primarySoft, borderColor: colors.primaryTint }]}>
@@ -260,15 +267,18 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.faint} />
           </PressableScale>
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
-      <FadeInView index={2}>
+      <TabFadeInView>
         <PressableScale onPress={() => logout()} style={styles.logoutButton}>
           <Ionicons name="log-out-outline" size={18} color={colors.danger} style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Logout</Text>
         </PressableScale>
-      </FadeInView>
+      </TabFadeInView>
+
+      <BannerAdSpace />
     </ScrollView>
+    </TabSceneGuard>
   );
 }
 

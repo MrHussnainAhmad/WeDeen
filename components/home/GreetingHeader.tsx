@@ -2,7 +2,9 @@ import React from 'react';
 import { Link } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts, radius } from '@/theme/colors';
+import { fonts, radius } from '@/theme/colors';
+import { useThemeColors } from '@/theme/useThemeColors';
+import { useThemeStore } from '@/store/themeStore';
 import { PressableScale } from '@/components/Anim';
 
 /**
@@ -24,8 +26,54 @@ export const GreetingHeader = React.memo(function GreetingHeader({
   name?: string | null;
   hour: number;
 }) {
+  const colors = useThemeColors();
+  const colorScheme = useThemeStore((s) => s.colorScheme);
+  const toggleColorScheme = useThemeStore((s) => s.toggleColorScheme);
   const part = partOfDay(hour);
   const firstName = name ? name.trim().split(/\s+/)[0] : null;
+
+  const styles = StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    left: { flex: 1 },
+    eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 },
+    eyebrowText: {
+      color: colors.goldDeep,
+      fontSize: 10.5,
+      fontWeight: '800',
+      letterSpacing: 1.2,
+    },
+    greeting: {
+      color: colors.text,
+      fontSize: 21,
+      fontWeight: '800',
+      fontFamily: fonts.serif,
+      letterSpacing: 0.2,
+    },
+    name: { color: colors.primary },
+    arabic: {
+      fontFamily: fonts.arabic,
+      color: colors.muted,
+      fontSize: 17,
+      lineHeight: 30,
+      marginTop: 3,
+    },
+    actions: { flexDirection: 'row', gap: 8 },
+    iconBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryTint,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
 
   return (
     <View style={styles.row}>
@@ -47,53 +95,24 @@ export const GreetingHeader = React.memo(function GreetingHeader({
         <Text style={styles.arabic}>{'السَّلامُ عَلَيْكُم'}</Text>
       </View>
 
-      <Link href="/settings" asChild>
-        <PressableScale style={styles.settingsBtn} accessibilityLabel="Open settings">
-          <Ionicons name="settings-outline" size={20} color={colors.primary} />
+      <View style={styles.actions}>
+        <PressableScale
+          onPress={() => toggleColorScheme()}
+          style={styles.iconBtn}
+          accessibilityLabel={colorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          <Ionicons
+            name={colorScheme === 'dark' ? 'sunny-outline' : 'moon-outline'}
+            size={20}
+            color={colors.primary}
+          />
         </PressableScale>
-      </Link>
+        <Link href="/settings" asChild>
+          <PressableScale style={styles.iconBtn} accessibilityLabel="Open settings">
+            <Ionicons name="settings-outline" size={20} color={colors.primary} />
+          </PressableScale>
+        </Link>
+      </View>
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  left: { flex: 1 },
-  eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 },
-  eyebrowText: {
-    color: colors.goldDeep,
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  greeting: {
-    color: colors.text,
-    fontSize: 21,
-    fontWeight: '800',
-    fontFamily: fonts.serif,
-    letterSpacing: 0.2,
-  },
-  name: { color: colors.primary },
-  arabic: {
-    fontFamily: fonts.arabic,
-    color: colors.muted,
-    fontSize: 17,
-    lineHeight: 30,
-    marginTop: 3,
-  },
-  settingsBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

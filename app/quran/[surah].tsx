@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -24,17 +24,61 @@ import {
   resumeAudio,
   stopAudio
 } from '@/services/quranService';
-import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { colors, fonts, radius, shadow, type ThemeColors } from '@/theme/colors';
+import { useThemeColors } from '@/theme/useThemeColors';
+import {
+  getFavoriteAyahKeys,
+  toggleFavoriteAyah,
+} from '@/services/favoriteAyahService';
+import {
+  checkDndPermission,
+  disableQuranFocus,
+  enableQuranFocus,
+  enableSilentRingerFallback,
+  openDndSettings,
+  restoreRingerFallback,
+  showFocusPermissionAlert,
+} from '@/services/focusModeService';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
 import { PressableScale } from '@/components/Anim';
 import { useResponsive } from '@/theme/responsive';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
+import { useHardwareBack } from '@/hooks/useHardwareBack';
+import { goBackOrReplace } from '@/utils/navigation';
+import {
+  fetchMemorization,
+  markMemorized,
+  queueMemorization,
+} from '@/services/memorizationService';
+import { useAuthStore } from '@/store/authStore';
 
 export default function SurahDetailScreen() {
-  const { surah } = useLocalSearchParams<{ surah: string }>();
+  const { surah, scrollAyah, returnTo } = useLocalSearchParams<{
+    surah: string;
+    scrollAyah?: string;
+    returnTo?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
+  const themeColors = useThemeColors();
+  const styles = useMemo(() => createStyles(themeColors), [themeColors]);
+  const listRef = useRef<FlatList>(null);
   const surahNumber = Number(surah);
+  const scrollAyahTarget = scrollAyah ? Number(scrollAyah) : null;
+  const token = useAuthStore((state) => state.token);
+  const accountId = useAuthStore((state) => state.user?.id);
+  const isMemorizationJourney = returnTo === 'memorization' && !!token && !!accountId;
+
+  const goBackFromSurah = useCallback(() => {
+    if (returnTo === 'memorization') {
+      goBackOrReplace('/(tabs)/memorization');
+    } else {
+      goBackOrReplace('/quran');
+    }
+    return true;
+  }, [returnTo]);
+  useHardwareBack(goBackFromSurah);
+
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -43,9 +87,14 @@ export default function SurahDetailScreen() {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [selectedEdition, setSelectedEdition] = useState('ar.alafasy');
   const [showReciterDropdown, setShowReciterDropdown] = useState(false);
+  const [focusModeOn, setFocusModeOn] = useState(false);
+  const [focusBusy, setFocusBusy] = useState(false);
+  const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
   const [arabicAyahFontSize, setArabicAyahFontSize] = useState(
     uiPreferenceDefaults.arabicAyahFontSize
   );
+  const [memorizedAyahs, setMemorizedAyahs] = useState<Set<number>>(new Set());
+  const [memorizationBusy, setMemorizationBusy] = useState<Set<number>>(new Set());
 
   const quranQuery = useQuery({ queryKey: ['quran-full'], queryFn: () => getOrDownloadQuran() });
   const recitersQuery = useQuery({ queryKey: ['reciters'], queryFn: getReciters });
@@ -57,6 +106,29 @@ export default function SurahDetailScreen() {
     surahData?.totalAyahs ??
     0;
   const reciters = (recitersQuery.data ?? []).filter((r: any) => r?.identifier && r?.name);
+
+  useEffect(() => {
+    if (!isMemorizationJourney || !token) {
+      setMemorizedAyahs(new Set());
+      return;
+    }
+    let active = true;
+    fetchMemorization(token)
+      .then((items) => {
+        if (!active) return;
+        setMemorizedAyahs(
+          new Set(
+            items
+              .filter((item) => item.surahNumber === surahNumber && item.memorized)
+              .map((item) => item.ayahNumber)
+          )
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [isMemorizationJourney, token, surahNumber]);
 
   useEffect(() => {
     getActiveReciterForSurah(surahNumber)
@@ -71,14 +143,121 @@ export default function SurahDetailScreen() {
       getUiPreferences()
         .then((prefs) => setArabicAyahFontSize(prefs.arabicAyahFontSize))
         .catch(() => undefined);
-      return () => undefined;
+      getFavoriteAyahKeys()
+        .then(setFavoriteKeys)
+        .catch(() => undefined);
+      return () => {
+        disableQuranFocus().catch(() => undefined);
+        setFocusModeOn(false);
+      };
     }, [])
   );
+
+  useEffect(() => {
+    if (!scrollAyahTarget || !surahData?.ayahs?.length) return;
+    const index = surahData.ayahs.findIndex(
+      (a: any) => Number(a.numberInSurah) === scrollAyahTarget
+    );
+    if (index < 0) return;
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.2 });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [scrollAyahTarget, surahData?.ayahs]);
+
+  const onToggleFocusMode = async () => {
+    if (focusBusy) return;
+    setFocusBusy(true);
+    try {
+      if (focusModeOn) {
+        await disableQuranFocus();
+        setFocusModeOn(false);
+        return;
+      }
+      const hasPermission = await checkDndPermission();
+      if (!hasPermission) {
+        showFocusPermissionAlert(() => openDndSettings());
+        const retry = await checkDndPermission();
+        if (!retry) {
+          await enableSilentRingerFallback();
+          setFocusModeOn(true);
+          setStatusMessage('Focus on — ringer silenced. Grant DND access for full silence.');
+          return;
+        }
+      }
+      const result = await enableQuranFocus();
+      if (!result.ok && result.reason === 'permission') {
+        showFocusPermissionAlert(() => openDndSettings());
+        await enableSilentRingerFallback();
+      }
+      if (playback === 'playing') {
+        await pauseAudio();
+        setPlayback('paused');
+      }
+      setFocusModeOn(true);
+      setStatusMessage('Focus Mode on — notifications silenced.');
+    } finally {
+      setFocusBusy(false);
+    }
+  };
+
+  const onToggleFavorite = async (item: any) => {
+    const ayahNumber = Number(item.numberInSurah);
+    const { starred } = await toggleFavoriteAyah({
+      surahNumber,
+      surahNameEnglish: surahData?.englishName ?? `Surah ${surahNumber}`,
+      surahNameArabic: surahData?.name,
+      ayahNumber,
+      arabicText: String(item.text ?? ''),
+    });
+    const keys = await getFavoriteAyahKeys();
+    setFavoriteKeys(keys);
+    setStatusMessage(starred ? 'Verse saved to favorites.' : 'Removed from favorites.');
+  };
+
+  const onToggleMemorized = async (ayahNumber: number) => {
+    if (!token || !accountId || memorizationBusy.has(ayahNumber)) return;
+    const memorized = !memorizedAyahs.has(ayahNumber);
+    setMemorizedAyahs((current) => {
+      const next = new Set(current);
+      if (memorized) next.add(ayahNumber);
+      else next.delete(ayahNumber);
+      return next;
+    });
+    setMemorizationBusy((current) => new Set(current).add(ayahNumber));
+
+    const item = { surahNumber, ayahNumber, memorized };
+    try {
+      await markMemorized(token, item);
+      setStatusMessage(memorized ? `Ayah ${ayahNumber} marked memorized.` : `Ayah ${ayahNumber} unmarked.`);
+    } catch (error: any) {
+      if (!error?.response) {
+        await queueMemorization(accountId, item);
+        setStatusMessage('Saved offline. Your memorization will sync when connected.');
+      } else {
+        setMemorizedAyahs((current) => {
+          const next = new Set(current);
+          if (memorized) next.delete(ayahNumber);
+          else next.add(ayahNumber);
+          return next;
+        });
+        setStatusMessage(error?.response?.data?.message || 'Could not update memorization.');
+      }
+    } finally {
+      setMemorizationBusy((current) => {
+        const next = new Set(current);
+        next.delete(ayahNumber);
+        return next;
+      });
+    }
+  };
 
   // Stop playback when leaving the surah so audio doesn't keep going on other screens.
   useEffect(() => {
     return () => {
       stopAudio().catch(() => undefined);
+      disableQuranFocus().catch(() => undefined);
+      restoreRingerFallback().catch(() => undefined);
     };
   }, []);
 
@@ -232,16 +411,28 @@ export default function SurahDetailScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <StarFieldWatermark rows={2} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
         <View style={styles.headerTopRow}>
-          <PressableScale onPress={() => router.back()} style={styles.backButton}>
+          <PressableScale onPress={goBackFromSurah} style={styles.backButton}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </PressableScale>
           <View style={styles.headerCenter}>
             <Text style={styles.surahTitle}>{surahData?.englishName || 'Surah'}</Text>
             <Text style={styles.ayahCount}>{surahAyahCount} Verses</Text>
+            {surahData?.name ? (
+              <Text style={styles.surahSubtitleInline}>{surahData.name}</Text>
+            ) : null}
           </View>
-          <View style={styles.headerArabicWrap}>
-            <Text style={styles.surahSubtitle}>{surahData?.name}</Text>
-          </View>
+          <PressableScale
+            onPress={onToggleFocusMode}
+            disabled={focusBusy}
+            style={[styles.focusButton, focusModeOn && styles.focusButtonActive]}
+            accessibilityLabel={focusModeOn ? 'Turn off Focus Mode' : 'Turn on Focus Mode'}
+          >
+            <Ionicons
+              name={focusModeOn ? 'moon' : 'moon-outline'}
+              size={20}
+              color={focusModeOn ? colors.gold : '#fff'}
+            />
+          </PressableScale>
         </View>
         <GeometricDivider color="rgba(197,155,39,0.5)" style={{ marginTop: 12 }} />
       </View>
@@ -356,10 +547,31 @@ export default function SurahDetailScreen() {
         </View>
       )}
 
+      {isMemorizationJourney ? (
+        <View style={styles.memorizationProgress}>
+          <MaterialCommunityIcons name="brain" size={20} color={themeColors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.memorizationProgressTitle}>Memorization progress</Text>
+            <Text style={styles.memorizationProgressText}>
+              {memorizedAyahs.size} of {surahAyahCount} ayahs marked learned
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       {/* Ayahs List */}
       <FlatList
+        ref={listRef}
         data={surahData?.ayahs ?? []}
         keyExtractor={(item: any) => `${item.numberInSurah}`}
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            listRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: true,
+            });
+          }, 100);
+        }}
         scrollEventThrottle={16}
         decelerationRate="fast"
         initialNumToRender={8}
@@ -384,12 +596,16 @@ export default function SurahDetailScreen() {
           ) : null
         }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
-        renderItem={({ item }: any) => (
+        renderItem={({ item }: any) => {
+          const ayahNum = Number(item.numberInSurah);
+          const favKey = `${surahNumber}:${ayahNum}`;
+          const isFavorite = favoriteKeys.has(favKey);
+          return (
           <View style={styles.ayahCard}>
             <View style={styles.ayahRow}>
               <View style={styles.ayahControlColumn}>
                 <View style={styles.ayahBadge}>
-                  <EightPointStar size={34} color={colors.primarySoft} />
+                  <EightPointStar size={34} color={themeColors.primarySoft} />
                   <Text style={styles.ayahNumber}>{item.numberInSurah}</Text>
                 </View>
                 <Pressable
@@ -402,7 +618,43 @@ export default function SurahDetailScreen() {
                   <Ionicons
                     name={activeAyah === item.numberInSurah ? 'pause' : 'play'}
                     size={15}
-                    color={activeAyah === item.numberInSurah ? '#fff' : colors.primary}
+                    color={activeAyah === item.numberInSurah ? '#fff' : themeColors.primary}
+                  />
+                </Pressable>
+                {isMemorizationJourney ? (
+                  <Pressable
+                    onPress={() => onToggleMemorized(ayahNum)}
+                    disabled={memorizationBusy.has(ayahNum)}
+                    style={[
+                      styles.memorizationButton,
+                      memorizedAyahs.has(ayahNum) && styles.memorizationButtonActive,
+                    ]}
+                    accessibilityLabel={
+                      memorizedAyahs.has(ayahNum)
+                        ? 'Mark ayah as not memorized'
+                        : 'Mark ayah as memorized'
+                    }
+                  >
+                    {memorizationBusy.has(ayahNum) ? (
+                      <ActivityIndicator size="small" color={themeColors.primary} />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name={memorizedAyahs.has(ayahNum) ? 'check-bold' : 'brain'}
+                        size={17}
+                        color={memorizedAyahs.has(ayahNum) ? '#fff' : themeColors.primary}
+                      />
+                    )}
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => onToggleFavorite(item)}
+                  style={styles.starButton}
+                  accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <Ionicons
+                    name={isFavorite ? 'star' : 'star-outline'}
+                    size={18}
+                    color={isFavorite ? themeColors.gold : themeColors.muted}
                   />
                 </Pressable>
               </View>
@@ -416,13 +668,15 @@ export default function SurahDetailScreen() {
               </Text>
             </View>
           </View>
-        )}
+        );
+        }}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -454,9 +708,19 @@ const styles = StyleSheet.create({
   headerCenter: {
     flex: 1,
   },
-  headerArabicWrap: {
-    minWidth: 90,
-    alignItems: 'flex-end',
+  focusButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  focusButtonActive: {
+    backgroundColor: 'rgba(197,155,39,0.25)',
+    borderColor: 'rgba(197,155,39,0.55)',
   },
   surahTitle: {
     fontSize: 24,
@@ -464,11 +728,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: fonts.serif,
   },
-  surahSubtitle: {
-    fontSize: 28,
+  surahSubtitleInline: {
+    fontSize: 20,
     color: colors.gold,
     fontFamily: fonts.arabic,
-    textAlign: 'right',
+    marginTop: 4,
   },
   ayahCount: {
     fontSize: 12.5,
@@ -633,6 +897,20 @@ const styles = StyleSheet.create({
     color: colors.goldDeep,
     flex: 1,
   },
+  memorizationProgress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 13,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+  },
+  memorizationProgressTitle: { color: colors.primary, fontWeight: '800', fontSize: 14 },
+  memorizationProgressText: { color: colors.muted, fontSize: 12, marginTop: 2 },
   listContent: {
     paddingHorizontal: 16,
   },
@@ -692,6 +970,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   playButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  starButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memorizationButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+  },
+  memorizationButtonActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },

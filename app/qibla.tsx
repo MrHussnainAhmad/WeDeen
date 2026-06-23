@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -8,6 +8,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { colors } from '@/theme/colors';
+import { BannerAdSpace } from '@/components/BannerAdSpace';
 
 // Ka'bah coordinates (Masjid al-Haram, Makkah).
 const KAABA_LAT = 21.4225;
@@ -203,7 +204,7 @@ export default function QiblaScreen() {
   ] as const;
 
   return (
-    <View style={styles.screen}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.card}>
         <Text style={styles.title}>Qibla Compass</Text>
         <Text style={styles.sub}>Point the top of your phone until the Ka'bah reaches the marker.</Text>
@@ -262,12 +263,14 @@ export default function QiblaScreen() {
         ) : null}
         <Text style={styles.hint}>For best accuracy, hold the phone flat. If it drifts, wave it in a figure-8 once.</Text>
       </View>
-    </View>
+      <BannerAdSpace />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, gap: 16 },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 10 },
   retry: { backgroundColor: colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, marginTop: 4 },
 

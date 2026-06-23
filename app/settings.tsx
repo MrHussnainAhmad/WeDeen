@@ -35,7 +35,9 @@ import { setActiveAudioVolume } from '@/services/audioManager';
 import { getAlarmVolume, setAlarmVolume } from '@/services/alarmVolume';
 import { disableBackgroundLocation, enableBackgroundLocation } from '@/services/backgroundLocation';
 import { useAuthStore } from '@/store/authStore';
+import { useThemeStore } from '@/store/themeStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { GeometricDivider } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { useResponsive } from '@/theme/responsive';
@@ -70,6 +72,9 @@ const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرّ
 
 export default function SettingsScreen() {
   const responsive = useResponsive();
+  const themeColors = useThemeColors();
+  const colorScheme = useThemeStore((s) => s.colorScheme);
+  const setColorScheme = useThemeStore((s) => s.setColorScheme);
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
 
@@ -85,6 +90,9 @@ export default function SettingsScreen() {
   const [adhanVolume, setAdhanVolume] = useState(uiPreferenceDefaults.adhanVolume);
   const [backgroundLocationEnabled, setBackgroundLocationEnabled] = useState(
     uiPreferenceDefaults.backgroundLocationEnabled
+  );
+  const [nightBrightnessEnabled, setNightBrightnessEnabled] = useState(
+    uiPreferenceDefaults.nightBrightnessEnabled
   );
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -207,6 +215,8 @@ export default function SettingsScreen() {
       adhanAlertsEnabled,
       adhanVolume,
       backgroundLocationEnabled,
+      colorScheme,
+      nightBrightnessEnabled,
       ...override,
     }).catch(() => undefined);
   };
@@ -256,6 +266,7 @@ export default function SettingsScreen() {
           setAdhanAlertsEnabled(prefs.adhanAlertsEnabled);
           setAdhanVolume(prefs.adhanVolume);
           setBackgroundLocationEnabled(prefs.backgroundLocationEnabled);
+          setNightBrightnessEnabled(prefs.nightBrightnessEnabled);
         })
         .catch(() => undefined);
       // On a real build, show the actual device alarm volume on the slider.
@@ -275,6 +286,8 @@ export default function SettingsScreen() {
         adhanAlertsEnabled,
         adhanVolume,
         backgroundLocationEnabled,
+        colorScheme,
+        nightBrightnessEnabled,
       }),
     onSuccess: async () => {
       // Apply the adhan-alerts toggle: schedule (or cancel) based on the saved
@@ -380,6 +393,48 @@ export default function SettingsScreen() {
 
         <OrnateCard index={1}>
           <SectionHeader
+            title="Appearance"
+            icon={<Ionicons name="moon-outline" size={18} color={themeColors.primary} />}
+          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchText}>
+              {colorScheme === 'dark' ? 'Dark mode on' : 'Dark mode off'}
+            </Text>
+            <Switch
+              value={colorScheme === 'dark'}
+              onValueChange={(value) => {
+                const next = value ? 'dark' : 'light';
+                setColorScheme(next).catch(() => undefined);
+                persistPrefs({ colorScheme: next });
+              }}
+              trackColor={{ false: '#C9D7D1', true: themeColors.primary }}
+              thumbColor={colorScheme === 'dark' ? themeColors.gold : '#FFFFFF'}
+            />
+          </View>
+          <View style={[styles.switchRow, { marginTop: 14 }]}>
+            <Text style={styles.switchText}>
+              {nightBrightnessEnabled
+                ? 'Comfort brightness at night (after Maghrib)'
+                : 'Night brightness off'}
+            </Text>
+            <Switch
+              value={nightBrightnessEnabled}
+              onValueChange={(value) => {
+                setNightBrightnessEnabled(value);
+                persistPrefs({ nightBrightnessEnabled: value });
+              }}
+              trackColor={{ false: '#C9D7D1', true: themeColors.primary }}
+              thumbColor={nightBrightnessEnabled ? themeColors.gold : '#FFFFFF'}
+            />
+          </View>
+          <Text style={styles.adhanHint}>
+            Lowers screen brightness gradually while the app is open at night. Restores when you
+            leave the app.
+          </Text>
+        </OrnateCard>
+
+        <OrnateCard index={2}>
+          <SectionHeader
             title="Prayer Time Format"
             icon={<Ionicons name="time-outline" size={18} color={colors.primary} />}
           />
@@ -396,7 +451,7 @@ export default function SettingsScreen() {
           </View>
         </OrnateCard>
 
-        <OrnateCard index={2}>
+        <OrnateCard index={3}>
           <SectionHeader
             title="Adhan Alerts"
             icon={<Ionicons name="notifications-outline" size={18} color={colors.primary} />}
@@ -455,7 +510,7 @@ export default function SettingsScreen() {
           </PressableScale>
         </OrnateCard>
 
-        <OrnateCard index={3}>
+        <OrnateCard index={4}>
           <SectionHeader
             title="Prayer Lock"
             icon={<Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />}

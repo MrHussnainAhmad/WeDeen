@@ -1,7 +1,8 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableScale } from '@/components/Anim';
 import { colors, shadow } from '@/theme/colors';
@@ -32,6 +33,19 @@ const TAB_SPECS: TabSpec[] = [
   },
   { routeName: 'profile', label: 'Profile', icon: 'person-outline', iconFocused: 'person' },
 ];
+
+const HOME_TAB = 'index';
+
+/** Root stack groups — when open, that screen owns the hardware back button. */
+const STACK_ROOTS = new Set([
+  'quran',
+  'hadith',
+  'settings',
+  'qibla',
+  'names',
+  'salah-focus',
+  'blocked',
+]);
 
 function SideTabButton({
   focused,
@@ -129,6 +143,34 @@ function CenterTabButton({
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 10);
+  const segments = useSegments();
+
+  // Hardware back on Timings / Prayer Lock / Memorize / Profile → Home tab.
+  useEffect(() => {
+    const onBack = () => {
+      const root = segments[0];
+      if (root && STACK_ROOTS.has(root)) return false;
+
+      const currentRoute = state.routes[state.index]?.name;
+      if (!currentRoute || currentRoute === HOME_TAB) return false;
+
+      const homeRoute = state.routes.find((r) => r.name === HOME_TAB);
+      if (!homeRoute) return false;
+
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: homeRoute.key,
+        canPreventDefault: true,
+      });
+      if (!event.defaultPrevented) {
+        navigation.navigate(HOME_TAB);
+      }
+      return true;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [navigation, segments, state.index, state.routes]);
 
   return (
     <View style={[styles.wrap, { paddingBottom: bottomPad }]}>

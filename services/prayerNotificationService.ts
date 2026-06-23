@@ -42,7 +42,7 @@ async function getNotifications() {
 }
 
 function locationKey(loc: AdhanLocation) {
-  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
+  if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
     return `coords_${loc.latitude.toFixed(4)}_${loc.longitude.toFixed(4)}`;
   }
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;

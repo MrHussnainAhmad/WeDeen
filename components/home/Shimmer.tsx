@@ -1,13 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { colors, radius } from '@/theme/colors';
+import { radius } from '@/theme/colors';
+import { useThemeColors } from '@/theme/useThemeColors';
+import { useThemeStore } from '@/store/themeStore';
 
 /**
- * A single shimmering placeholder block. A soft highlight bar sweeps left→right
- * over a warm "paper" base — the loading language used across the Home screen.
- *
- * Pure RN Animated (native driver), no extra deps. All Shimmers on screen share
- * the same cheap looping value, so a full skeleton costs one animation.
+ * Borderless shimmer block — soft highlight only, no box outline.
+ * Uses bgDeep so it blends with the screen during tab fade transitions.
  */
 export function Shimmer({
   width,
@@ -20,6 +19,8 @@ export function Shimmer({
   radius?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const colors = useThemeColors();
+  const colorScheme = useThemeStore((s) => s.colorScheme);
   const sweep = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -41,14 +42,23 @@ export function Shimmer({
   });
   const opacity = sweep.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: [0, 0.55, 0],
+    outputRange: [0, 0.45, 0],
   });
+
+  const highlightColor =
+    colorScheme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.55)';
 
   return (
     <View
       style={[
         styles.base,
-        { height, borderRadius: r },
+        {
+          height,
+          borderRadius: r,
+          backgroundColor: colors.bgDeep,
+          borderWidth: 0,
+          borderColor: 'transparent',
+        },
         width !== undefined ? { width } : { alignSelf: 'stretch' },
         style,
       ]}
@@ -56,7 +66,11 @@ export function Shimmer({
       <Animated.View
         style={[
           styles.highlight,
-          { opacity, transform: [{ translateX }, { skewX: '-18deg' }] },
+          {
+            backgroundColor: highlightColor,
+            opacity,
+            transform: [{ translateX }, { skewX: '-18deg' }],
+          },
         ]}
       />
     </View>
@@ -65,7 +79,6 @@ export function Shimmer({
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.cardAlt,
     overflow: 'hidden',
   },
   highlight: {
@@ -73,6 +86,5 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 90,
-    backgroundColor: 'rgba(255,255,255,0.75)',
   },
 });

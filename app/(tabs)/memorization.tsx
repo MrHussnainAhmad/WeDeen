@@ -1,16 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect, useRef, useState } from 'react';
-import { fetchLearningProgress, unlockNextSurah } from '@/services/memorizationService';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  cacheLearningProgress,
+  fetchLearningProgress,
+  getCachedLearningProgress,
+  unlockNextSurah,
+} from '@/services/memorizationService';
 import { useAuthStore } from '@/store/authStore';
-import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { fonts, radius, shadow, type ThemeColors } from '@/theme/colors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
-import { FadeInView, PressableScale, useBreathing } from '@/components/Anim';
+import { TabFadeInView, PressableScale, useBreathing } from '@/components/Anim';
+import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
 import { useResponsive } from '@/theme/responsive';
 import { Animated } from 'react-native';
+import { BannerAdSpace } from '@/components/BannerAdSpace';
 
 const TOTAL_SURAHS = 114;
 const VISIBLE_MAP_NODES = 28;
@@ -20,6 +28,9 @@ const NODE = 74;          // level node diameter
 const VSTEP = 108;        // vertical distance between levels
 const TOP_PAD = 64;       // breathing room above the highest visible node
 const BOTTOM_PAD = 78;    // breathing room below Surah 1
+const ROAD_BASE_W = 20;   // chunky road bed width
+const ROAD_TOP_W = 12;    // colored progress road width
+const TOTAL_BATCHES = Math.ceil(TOTAL_SURAHS / VISIBLE_MAP_NODES);
 
 // Emerald/gold milestone icons (vector, no external images) cycled along the path.
 const NODE_ICONS = [
@@ -31,17 +42,31 @@ const NODE_ICONS = [
   'compass-outline',
 ] as const;
 
-// Floating decorations scattered beside the trail.
-const DECOR_ICONS = ['mosque', 'star-crescent', 'candelabra', 'candle', 'book-open-page-variant'] as const;
+// Islamic lantern / landmark decorations scattered beside the trail.
+const DECOR_ICONS = ['lamp', 'mosque', 'star-crescent', 'candelabra'] as const;
+
+function openSurahFromMemorization(surahNumber: number) {
+  router.push({
+    pathname: '/quran/[surah]',
+    params: { surah: String(surahNumber), returnTo: 'memorization' },
+  } as any);
+}
 
 export default function MemorizationScreen() {
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const queryClient = useQueryClient();
   const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => s.user?.id);
   const scrollRef = useRef<ScrollView | null>(null);
+  const scrollContentRef = useRef<View | null>(null);
+  const scrollAnchorRef = useRef<View | null>(null);
+  const checkpointRef = useRef<View | null>(null);
+  const trackRef = useRef<View | null>(null);
   const autoScrolledRef = useRef(false);
-  const trackOffsetYRef = useRef(0);
+  const trackWRef = useRef(0);
   const [trackW, setTrackW] = useState(0);
 
   const glow = useBreathing(0.25, 0.85, 1300);   // pulsing halo on the current node
@@ -49,25 +74,150 @@ export default function MemorizationScreen() {
 
   const progressQuery = useQuery({
     queryKey: ['learning-progress', token],
-    queryFn: () => fetchLearningProgress(token as string),
-    enabled: !!token
+    queryFn: () => fetchLearningProgress(token as string, userId as string),
+    enabled: !!token && !!userId,
+    staleTime: 5 * 60 * 1000,
   });
 
+  // Show cached progress instantly while the network fetch runs.
+  useEffect(() => {
+    if (!token || !userId) return;
+    getCachedLearningProgress(userId)
+      .then((cached) => {
+        if (cached) {
+          queryClient.setQueryData(['learning-progress', token], cached);
+        }
+      })
+      .catch(() => undefined);
+  }, [token, userId, queryClient]);
+
   const unlockMutation = useMutation({
-    mutationFn: (surahNumber: number) => unlockNextSurah(token as string, surahNumber),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['learning-progress', token] });
-    }
+    mutationFn: (surahNumber: number) =>
+      unlockNextSurah(token as string, userId as string, surahNumber),
+    onMutate: async (surahNumber) => {
+      await queryClient.cancelQueries({ queryKey: ['learning-progress', token] });
+      const previous = queryClient.getQueryData<{ unlockedSurah: number }>([
+        'learning-progress',
+        token,
+      ]);
+      const current = previous?.unlockedSurah ?? 1;
+      if (surahNumber === current && current < 114) {
+        const optimistic = { unlockedSurah: current + 1 };
+        queryClient.setQueryData(['learning-progress', token], optimistic);
+        if (userId) cacheLearningProgress(userId, optimistic).catch(() => undefined);
+      }
+      return { previous };
+    },
+    onError: (_err, _surahNumber, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['learning-progress', token], context.previous);
+        if (userId) cacheLearningProgress(userId, context.previous).catch(() => undefined);
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['learning-progress', token], data);
+      if (userId) cacheLearningProgress(userId, data).catch(() => undefined);
+    },
   });
 
   const unlockedSurah = progressQuery.data?.unlockedSurah ?? 1;
 
+  const scrollToCurrentCheckpoint = useCallback(() => {
+    if (autoScrolledRef.current) return;
+    const scrollView = scrollRef.current;
+    const content = scrollContentRef.current;
+    if (!scrollView || !content) return;
+
+    const finish = (y: number) => {
+      const viewHeight = Dimensions.get('window').height;
+      const target = Math.max(0, y - viewHeight * 0.38);
+      scrollView.scrollTo({ y: target, animated: true });
+      autoScrolledRef.current = true;
+    };
+
+    const scrollToCheckpointCard = () => {
+      const checkpoint = checkpointRef.current;
+      if (!checkpoint) return;
+      checkpoint.measureLayout(
+        content,
+        (_x, y) => finish(y),
+        () => undefined
+      );
+    };
+
+    const scrollFromTrackGeometry = () => {
+      const track = trackRef.current;
+      const w = trackWRef.current;
+      if (!track || w <= 0) {
+        scrollToCheckpointCard();
+        return;
+      }
+
+      const batchIdx = Math.floor((unlockedSurah - 1) / VISIBLE_MAP_NODES);
+      const batchStart = batchIdx * VISIBLE_MAP_NODES + 1;
+      const batchEnd = Math.min(TOTAL_SURAHS, batchStart + VISIBLE_MAP_NODES - 1);
+      const batchCount = batchEnd - batchStart + 1;
+      const idx = unlockedSurah - batchStart;
+      const th = TOP_PAD + BOTTOM_PAD + (batchCount - 1) * VSTEP;
+      const nodeY = th - BOTTOM_PAD - idx * VSTEP;
+
+      track.measureLayout(
+        content,
+        (_x, trackY) => finish(trackY + nodeY - NODE / 2),
+        () => scrollToCheckpointCard()
+      );
+    };
+
+    const anchor = scrollAnchorRef.current;
+    if (anchor) {
+      anchor.measureLayout(
+        content,
+        (_x, y) => finish(y),
+        () => scrollFromTrackGeometry()
+      );
+      return;
+    }
+
+    scrollFromTrackGeometry();
+  }, [unlockedSurah]);
+
+  const resetScrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  const scheduleScrollToCheckpoint = useCallback(() => {
+    autoScrolledRef.current = false;
+    resetScrollToTop();
+    setTimeout(() => scrollToCurrentCheckpoint(), 120);
+  }, [scrollToCurrentCheckpoint, resetScrollToTop]);
+
   useEffect(() => {
     autoScrolledRef.current = false;
-  }, [unlockedSurah]);
+    resetScrollToTop();
+  }, [unlockedSurah, resetScrollToTop]);
+
+  // Re-scroll every time the tab opens; start at top, then glide to checkpoint.
+  useFocusEffect(
+    useCallback(() => {
+      autoScrolledRef.current = false;
+      resetScrollToTop();
+      const delays = [320, 480, 700, 1000, 1500];
+      const timers = delays.map((ms) =>
+        setTimeout(() => scrollToCurrentCheckpoint(), ms)
+      );
+      return () => timers.forEach(clearTimeout);
+    }, [scrollToCurrentCheckpoint, resetScrollToTop])
+  );
+
+  // Auto-scroll once the track width is known and nodes have rendered.
+  useEffect(() => {
+    if (trackWRef.current <= 0) return;
+    scheduleScrollToCheckpoint();
+  }, [trackW, unlockedSurah, scheduleScrollToCheckpoint]);
 
   if (!token) {
     return (
+      <TabSceneGuard>
       <View style={styles.centerContainer}>
         <View style={styles.lockHero}>
           <StarFieldWatermark rows={2} cols={5} starSize={20} color="rgba(255,255,255,0.05)" />
@@ -83,19 +233,26 @@ export default function MemorizationScreen() {
           </PressableScale>
         </View>
       </View>
+      </TabSceneGuard>
     );
   }
 
-  if (progressQuery.isLoading) {
+  if (progressQuery.isLoading && !progressQuery.data) {
     return (
+      <TabSceneGuard>
       <View style={styles.loaderWrap}>
         <ActivityIndicator color={colors.primary} size="large" />
         <Text style={styles.loaderText}>Loading your journey…</Text>
       </View>
+      </TabSceneGuard>
     );
   }
 
-  const startSurah = Math.max(1, unlockedSurah - 8);
+  // Fixed batches of 28: surahs 1-28, 29-56, 57-84, 85-112, 113-114. Surahs
+  // still unlock one at a time; the map shows the batch containing the current
+  // surah and advances to the next batch once the user crosses into it.
+  const batchIndex = Math.floor((unlockedSurah - 1) / VISIBLE_MAP_NODES);
+  const startSurah = batchIndex * VISIBLE_MAP_NODES + 1;
   const endSurah = Math.min(TOTAL_SURAHS, startSurah + VISIBLE_MAP_NODES - 1);
   const mapSurahs = Array.from({ length: endSurah - startSurah + 1 }, (_, i) => startSurah + i);
   const count = mapSurahs.length;
@@ -113,38 +270,51 @@ export default function MemorizationScreen() {
     y: trackHeight - BOTTOM_PAD - t * VSTEP,
   });
 
-  // Winding dotted trail: 3 dots interpolated along each segment.
-  const dots: { x: number; y: number; reached: boolean; key: string }[] = [];
+  // Connected winding road: one rotated capsule per segment between levels, plus
+  // a small center stud — gives the continuous Candy-Crush path feel.
+  const segments: {
+    x: number;
+    y: number;
+    len: number;
+    angle: number;
+    reached: boolean;
+    studX: number;
+    studY: number;
+    key: string;
+  }[] = [];
   if (trackW > 0) {
     for (let i = 0; i < count - 1; i++) {
-      const reached = startSurah + i + 1 <= unlockedSurah;
-      for (const f of [0.28, 0.5, 0.72]) {
-        const p = posFor(i + f);
-        dots.push({ x: p.x, y: p.y, reached, key: `${i}-${f}` });
-      }
+      const a = posFor(i);
+      const b = posFor(i + 1);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy);
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const mid = posFor(i + 0.5);
+      segments.push({
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+        len,
+        angle,
+        reached: startSurah + i + 1 <= unlockedSurah,
+        studX: mid.x,
+        studY: mid.y,
+        key: `seg-${i}`,
+      });
     }
   }
 
-  // Auto-scroll so the current level sits comfortably in view.
-  const maybeAutoScroll = () => {
-    if (autoScrolledRef.current || trackW === 0) return;
-    const currentIndex = unlockedSurah - startSurah;
-    const nodeTop = posFor(currentIndex).y - NODE / 2;
-    const target = Math.max(0, trackOffsetYRef.current + nodeTop - 240);
-    autoScrolledRef.current = true;
-    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: target, animated: true }));
-    setTimeout(() => scrollRef.current?.scrollTo({ y: target, animated: true }), 360);
-  };
-
   return (
+    <TabSceneGuard>
     <ScrollView
       ref={scrollRef}
       style={styles.screen}
       contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
+      <View ref={scrollContentRef} collapsable={false}>
       {/* ───── Hero ───── */}
-      <FadeInView index={0}>
+      <TabFadeInView>
         <View style={styles.hero}>
           <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
           <View style={styles.heroGoldTop} />
@@ -166,39 +336,80 @@ export default function MemorizationScreen() {
             <Text style={styles.heroPct}>{progressPct}%</Text>
           </View>
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
       {/* ───── Journey Map (serpentine, bottom → top) ───── */}
-      <FadeInView index={1}>
-        <View
-          style={styles.mapCard}
-          onLayout={(e) => { trackOffsetYRef.current = e.nativeEvent.layout.y; maybeAutoScroll(); }}
-        >
+      <TabFadeInView>
+        <BannerAdSpace style={{ marginBottom: 16 }} />
+        <View style={styles.mapCard}>
           <StarFieldWatermark rows={8} cols={5} starSize={26} color="rgba(11,107,79,0.04)" />
 
           <View style={styles.pathLabelWrap}>
             <EightPointStar size={12} color={colors.gold} />
-            <Text style={styles.pathLabel}>Memorization Route</Text>
+            <View style={styles.stageLabelCenter}>
+              <Text style={styles.pathLabel}>STAGE {batchIndex + 1} OF {TOTAL_BATCHES}</Text>
+              <Text style={styles.stageSub}>Surahs {startSurah}–{endSurah}</Text>
+            </View>
             <EightPointStar size={12} color={colors.gold} />
           </View>
 
           <View
+            ref={trackRef}
+            collapsable={false}
             style={[styles.track, { height: trackHeight }]}
-            onLayout={(e) => { setTrackW(e.nativeEvent.layout.width); maybeAutoScroll(); }}
+            onLayout={(e) => {
+              const w = e.nativeEvent.layout.width;
+              if (w <= 0) return;
+              const widthChanged = trackWRef.current !== w;
+              trackWRef.current = w;
+              if (widthChanged) setTrackW(w);
+              if (!autoScrolledRef.current) {
+                requestAnimationFrame(() => {
+                  setTimeout(() => scrollToCurrentCheckpoint(), 32);
+                });
+              }
+            }}
           >
-            {/* Winding dotted trail */}
-            {dots.map((d) => (
-              <View
-                key={d.key}
-                style={[
-                  styles.trailDot,
-                  d.reached ? styles.trailDotOn : styles.trailDotOff,
-                  { left: d.x - 4, top: d.y - 4 },
-                ]}
-              />
+            {/* Connected winding candy road */}
+            {segments.map((s) => (
+              <View key={s.key} pointerEvents="none">
+                {/* Chunky road bed */}
+                <View
+                  style={[
+                    styles.roadBase,
+                    {
+                      width: s.len + ROAD_BASE_W,
+                      left: s.x - (s.len + ROAD_BASE_W) / 2,
+                      top: s.y - ROAD_BASE_W / 2,
+                      transform: [{ rotate: `${s.angle}deg` }],
+                    },
+                  ]}
+                />
+                {/* Colored progress road */}
+                <View
+                  style={[
+                    styles.roadTop,
+                    s.reached ? styles.roadTopOn : styles.roadTopOff,
+                    {
+                      width: s.len + 4,
+                      left: s.x - (s.len + 4) / 2,
+                      top: s.y - ROAD_TOP_W / 2,
+                      transform: [{ rotate: `${s.angle}deg` }],
+                    },
+                  ]}
+                />
+                {/* Center stud (lane gem) */}
+                <View
+                  style={[
+                    styles.roadStud,
+                    s.reached ? styles.roadStudOn : styles.roadStudOff,
+                    { left: s.studX - 4, top: s.studY - 4 },
+                  ]}
+                />
+              </View>
             ))}
 
-            {/* Floating decorations beside the path */}
+            {/* Islamic lantern landmarks beside the path */}
             {trackW > 0 && mapSurahs.map((surahNumber, index) => {
               if (index === 0 || index % 4 !== 0) return null;
               const p = posFor(index);
@@ -210,11 +421,12 @@ export default function MemorizationScreen() {
                   pointerEvents="none"
                   style={[
                     styles.decor,
-                    { top: p.y - 16 },
-                    onRight ? { right: 10 } : { left: 10 },
+                    { top: p.y - 20 },
+                    onRight ? { right: 6 } : { left: 6 },
                   ]}
                 >
-                  <MaterialCommunityIcons name={decoIcon as any} size={26} color="rgba(197,155,39,0.55)" />
+                  <View style={styles.decorGlow} />
+                  <MaterialCommunityIcons name={decoIcon as any} size={26} color={colors.goldDeep} />
                 </View>
               );
             })}
@@ -230,10 +442,22 @@ export default function MemorizationScreen() {
               return (
                 <View
                   key={surahNumber}
+                  ref={isCurrent ? scrollAnchorRef : undefined}
+                  collapsable={false}
                   style={[styles.nodeSlot, { left: p.x - NODE / 2, top: p.y - NODE / 2 }]}
                 >
-                  {/* Pulsing halo on the current level */}
-                  {isCurrent ? <Animated.View style={[styles.currentGlow, { opacity: glow }]} /> : null}
+                  {/* Pulsing halo + twinkling stars on the current level */}
+                  {isCurrent ? (
+                    <>
+                      <Animated.View style={[styles.currentGlow, { opacity: glow }]} />
+                      <Animated.View style={[styles.sparkleA, { opacity: glow }]}>
+                        <EightPointStar size={11} color={colors.gold} />
+                      </Animated.View>
+                      <Animated.View style={[styles.sparkleB, { opacity: bounce }]}>
+                        <EightPointStar size={8} color={colors.goldDeep} />
+                      </Animated.View>
+                    </>
+                  ) : null}
 
                   {/* Cleared-level star rating */}
                   {isCleared ? (
@@ -248,7 +472,7 @@ export default function MemorizationScreen() {
                     style={isCurrent ? { transform: [{ translateY: bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -9] }) }] } : undefined}
                   >
                     <PressableScale
-                      onPress={() => (isUnlocked ? router.push(`/quran/${surahNumber}`) : undefined)}
+                      onPress={() => (isUnlocked ? openSurahFromMemorization(surahNumber) : undefined)}
                       style={styles.nodeOuter}
                     >
                       {/* 3D base shadow disc for the chunky candy look */}
@@ -265,6 +489,9 @@ export default function MemorizationScreen() {
                           isCurrent && styles.nodeCurrent,
                         ]}
                       >
+                        {/* Glossy candy highlight */}
+                        {isUnlocked ? <View style={styles.nodeGloss} /> : null}
+
                         <MaterialCommunityIcons
                           name={nodeIcon as any}
                           size={30}
@@ -291,9 +518,18 @@ export default function MemorizationScreen() {
                   </Animated.View>
 
                   {isCurrent ? (
-                    <View style={styles.youAreHere}>
-                      <Text style={styles.youAreHereText}>YOU</Text>
-                    </View>
+                    <Animated.View
+                      style={[
+                        styles.signpost,
+                        { transform: [{ translateY: bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) }] },
+                      ]}
+                    >
+                      <View style={styles.signpostBody}>
+                        <Ionicons name="location" size={11} color={colors.gold} />
+                        <Text style={styles.signpostText}>YOU ARE HERE</Text>
+                      </View>
+                      <View style={styles.signpostPointer} />
+                    </Animated.View>
                   ) : null}
                 </View>
               );
@@ -308,11 +544,11 @@ export default function MemorizationScreen() {
             ) : null}
           </View>
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
       {/* ───── Current Level Checkpoint ───── */}
-      <FadeInView index={2}>
-        <View style={styles.checkpoint}>
+      <TabFadeInView>
+        <View ref={checkpointRef} collapsable={false} style={styles.checkpoint}>
           <StarFieldWatermark rows={3} cols={5} starSize={24} color="rgba(11,107,79,0.04)" />
 
           {/* Header: a replica of the current map node + label */}
@@ -353,7 +589,7 @@ export default function MemorizationScreen() {
 
           {/* Chunky candy action buttons */}
           <View style={styles.actionButtonsRow}>
-            <PressableScale onPress={() => router.push(`/quran/${unlockedSurah}`)} style={[styles.actionButton, styles.readButton]}>
+            <PressableScale onPress={() => openSurahFromMemorization(unlockedSurah)} style={[styles.actionButton, styles.readButton]}>
               <Ionicons name="book" size={18} color="#fff" />
               <Text style={styles.actionButtonText}>Read & Listen</Text>
             </PressableScale>
@@ -368,13 +604,21 @@ export default function MemorizationScreen() {
               </Text>
             </PressableScale>
           </View>
+          {unlockMutation.isError ? (
+            <Text style={styles.unlockError}>
+              {(unlockMutation.error as any)?.response?.data?.message ||
+                'Could not unlock the next Surah. Mark every ayah learned first.'}
+            </Text>
+          ) : null}
         </View>
-      </FadeInView>
+      </TabFadeInView>
+      </View>
     </ScrollView>
+    </TabSceneGuard>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   container: { padding: 16, paddingBottom: 128, gap: 16 },
 
@@ -426,16 +670,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 7, borderWidth: 1, borderColor: colors.goldBorder,
     flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 2,
   },
-  pathLabel: { color: colors.goldDeep, fontWeight: '800', fontSize: 12, letterSpacing: 0.4 },
+  stageLabelCenter: { alignItems: 'center' },
+  pathLabel: { color: colors.goldDeep, fontWeight: '900', fontSize: 12, letterSpacing: 0.8 },
+  stageSub: { color: colors.goldDeep, fontWeight: '700', fontSize: 9.5, letterSpacing: 0.4, opacity: 0.85, marginTop: 1 },
 
   // Serpentine track
   track: { width: '100%', position: 'relative' },
 
-  trailDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4 },
-  trailDotOn: { backgroundColor: colors.gold, opacity: 0.9 },
-  trailDotOff: { backgroundColor: colors.primaryTint, opacity: 0.7 },
+  // Connected winding candy road
+  roadBase: {
+    position: 'absolute', height: ROAD_BASE_W, borderRadius: ROAD_BASE_W / 2,
+    backgroundColor: colors.primaryDeep, opacity: 0.16,
+  },
+  roadTop: { position: 'absolute', height: ROAD_TOP_W, borderRadius: ROAD_TOP_W / 2 },
+  roadTopOn: { backgroundColor: colors.gold, opacity: 0.95 },
+  roadTopOff: { backgroundColor: colors.primaryTint, opacity: 0.9 },
+  roadStud: { position: 'absolute', width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
+  roadStudOn: { backgroundColor: '#fff', borderColor: colors.goldDeep },
+  roadStudOff: { backgroundColor: colors.card, borderColor: colors.primaryTint },
 
-  decor: { position: 'absolute', opacity: 0.9 },
+  decor: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  decorGlow: {
+    position: 'absolute', width: 34, height: 34, borderRadius: 17,
+    backgroundColor: colors.goldSoft, opacity: 0.9,
+  },
 
   nodeSlot: { position: 'absolute', width: NODE, height: NODE, alignItems: 'center', justifyContent: 'center' },
 
@@ -460,6 +718,10 @@ const styles = StyleSheet.create({
     width: NODE, height: NODE, borderRadius: 26, alignItems: 'center', justifyContent: 'center',
     borderWidth: 3, backgroundColor: '#fff',
   },
+  nodeGloss: {
+    position: 'absolute', top: 7, width: 32, height: 14, borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
   nodeUnlocked: { borderColor: colors.primaryTint },
   nodeCleared: { backgroundColor: colors.primary, borderColor: colors.gold },
   nodeLocked: { borderColor: colors.borderSoft, backgroundColor: '#F1EBDD' },
@@ -480,11 +742,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border,
   },
 
-  youAreHere: {
-    position: 'absolute', bottom: -30, backgroundColor: colors.primaryDeep, borderRadius: radius.pill,
-    paddingHorizontal: 9, paddingVertical: 2, borderWidth: 1, borderColor: colors.gold,
+  // Twinkling stars around the current node
+  sparkleA: { position: 'absolute', top: -6, right: -2, zIndex: 4 },
+  sparkleB: { position: 'absolute', top: 6, left: -4, zIndex: 4 },
+
+  // Bobbing "YOU ARE HERE" signpost pin above the current node
+  signpost: { position: 'absolute', top: -34, alignItems: 'center', zIndex: 6 },
+  signpostBody: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: colors.primaryDeep, borderRadius: radius.pill,
+    paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: colors.gold,
   },
-  youAreHereText: { color: colors.gold, fontWeight: '900', fontSize: 9, letterSpacing: 1 },
+  signpostText: { color: colors.gold, fontWeight: '900', fontSize: 8.5, letterSpacing: 0.8 },
+  signpostPointer: {
+    width: 0, height: 0, marginTop: -1,
+    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: colors.primaryDeep,
+  },
 
   startFlag: {
     position: 'absolute', width: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
@@ -540,4 +814,5 @@ const styles = StyleSheet.create({
   unlockButton: { backgroundColor: colors.gold, borderColor: colors.goldDeep },
   disabledButton: { opacity: 0.5 },
   actionButtonText: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
+  unlockError: { color: colors.danger, fontWeight: '700', fontSize: 12, lineHeight: 18, marginTop: 12, textAlign: 'center' },
 });

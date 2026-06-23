@@ -8,12 +8,14 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
-import { FadeInView, PressableScale } from '@/components/Anim';
+import { TabFadeInView, PressableScale } from '@/components/Anim';
+import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
 import { OrnateCard, SectionHeader } from '@/components/ui';
 import { useResponsive } from '@/theme/responsive';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
 import { saveLocation, getSavedLocation, type SavedLocation } from '@/services/locationService';
+import { BannerAdSpace } from '@/components/BannerAdSpace';
 
 const LOCATION_KEY = 'timings_location_v1';
 const TIMINGS_CACHE_PREFIX = 'timings_cache_v1_';
@@ -72,7 +74,7 @@ function formatGregorianLabel(gregorian?: any) {
 }
 
 function getLocationCacheKey(loc: SavedLocation) {
-  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
+  if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
     return `coords_${loc.latitude.toFixed(4)}_${loc.longitude.toFixed(4)}`;
   }
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
@@ -173,7 +175,7 @@ export default function TimingsScreen() {
       const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`;
       let url = '';
 
-      if (location.mode === 'coords' && location.latitude && location.longitude) {
+      if (location.mode === 'coords' && location.latitude != null && location.longitude != null) {
         url = `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=2`;
       } else {
         url = `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=2`;
@@ -361,13 +363,14 @@ export default function TimingsScreen() {
     : 'Loading Gregorian range';
 
   return (
+    <TabSceneGuard>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
       {/* ───── Next Prayer Hero ───── */}
-      <FadeInView index={0}>
+      <TabFadeInView>
         <View style={styles.hero}>
           <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
           <View style={styles.heroGoldTop} />
@@ -416,7 +419,7 @@ export default function TimingsScreen() {
           </View>
 
         </View>
-      </FadeInView>
+      </TabFadeInView>
 
       {/* ───── Location ───── */}
       <OrnateCard index={1}>
@@ -504,6 +507,8 @@ export default function TimingsScreen() {
       </OrnateCard>
 
       {/* ───── Hijri Calendar ───── */}
+      <BannerAdSpace />
+
       <OrnateCard index={3}>
         <SectionHeader
           title="Hijri Calendar"
@@ -590,6 +595,7 @@ export default function TimingsScreen() {
         <GeometricDivider color={colors.goldBorder} />
       </View>
     </ScrollView>
+    </TabSceneGuard>
   );
 }
 

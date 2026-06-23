@@ -42,14 +42,14 @@ export function normalizeTime(raw?: string) {
 }
 
 function locationKey(loc: PrayerLocation) {
-  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
+  if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
     return `coords_${loc.latitude.toFixed(4)}_${loc.longitude.toFixed(4)}`;
   }
   return `city_${(loc.city || '').toLowerCase()}_${(loc.country || '').toLowerCase()}`;
 }
 
 function calendarUrl(loc: PrayerLocation, year: number, month: number) {
-  if (loc.mode === 'coords' && loc.latitude && loc.longitude) {
+  if (loc.mode === 'coords' && loc.latitude != null && loc.longitude != null) {
     return `https://api.aladhan.com/v1/calendar?latitude=${loc.latitude}&longitude=${loc.longitude}&method=2&month=${month}&year=${year}`;
   }
   return `https://api.aladhan.com/v1/calendarByCity?city=${encodeURIComponent(

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
+import { useCallback } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,10 +10,19 @@ import { EightPointStar } from '@/components/IslamicMotifs';
 import { ListRowSkeleton } from '@/components/loading/ListRowSkeleton';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { useResponsive } from '@/theme/responsive';
+import { useHardwareBack } from '@/hooks/useHardwareBack';
+import { goBackOrReplace } from '@/utils/navigation';
 
 export default function QuranListScreen() {
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
+
+  const goHome = useCallback(() => {
+    goBackOrReplace('/(tabs)/index');
+    return true;
+  }, []);
+  useHardwareBack(goHome);
+
   const { data, error, isLoading, isError, refetch } = useQuery({
     queryKey: ['quran-full'],
     queryFn: () => getOrDownloadQuran()

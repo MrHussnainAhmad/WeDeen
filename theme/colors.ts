@@ -1,7 +1,9 @@
 // WeDeen design tokens — "Emerald & Gold Heritage"
 // Backward compatible: original keys (bg, card, text, muted, primary, border) preserved.
 
-export const colors = {
+export type ThemeColors = typeof lightColors;
+
+export const lightColors = {
   // Surfaces
   bg: '#F6F1E7',          // warm ivory "paper"
   bgDeep: '#F3EDE2',      // skeleton / placeholder wash (warm, not dark)
@@ -40,6 +42,46 @@ export const colors = {
   onDarkMuted: 'rgba(255,255,255,0.78)',
   onDarkFaint: 'rgba(255,255,255,0.16)',
 };
+
+/** @deprecated Use `useThemeColors()` or `getColors()` for theme-aware colors. */
+export const colors = lightColors;
+
+export const darkColors: ThemeColors = {
+  bg: '#0E1612',
+  bgDeep: '#0A110E',
+  card: '#152019',
+  cardAlt: '#1A2820',
+
+  text: '#E8F0EB',
+  muted: '#8FA396',
+  faint: '#5C7268',
+
+  primary: '#1A9A72',
+  primaryDark: '#0F6B4F',
+  primaryDeep: '#063528',
+  primarySoft: '#1A2E26',
+  primaryTint: '#243830',
+
+  gold: '#D4AD3A',
+  goldDeep: '#C59B27',
+  goldSoft: '#2A2418',
+  goldBorder: '#4A3D22',
+
+  border: '#243830',
+  borderSoft: '#1E2E28',
+
+  danger: '#E05A45',
+  dangerSoft: '#2A1814',
+  success: '#1A9A72',
+
+  onDark: '#FFFFFF',
+  onDarkMuted: 'rgba(255,255,255,0.78)',
+  onDarkFaint: 'rgba(255,255,255,0.16)',
+};
+
+export function getColors(scheme: 'light' | 'dark'): ThemeColors {
+  return scheme === 'dark' ? darkColors : lightColors;
+}
 
 export const fonts = {
   arabic: 'KFGQPCNastaleeq',

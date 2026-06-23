@@ -4,10 +4,13 @@ import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Animated, AppState, Easing, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
-import { colors } from '@/theme/colors';
+import { useThemeStore } from '@/store/themeStore';
+import { getColors, colors } from '@/theme/colors';
+import { useNightBrightness } from '@/hooks/useNightBrightness';
+import { isQuranFocusActive } from '@/services/focusModeService';
 import { EightPointStar, GeometricDivider } from '@/components/IslamicMotifs';
 import { HadithPredownloadPrompt } from '@/components/HadithPredownloadPrompt';
 import {
@@ -33,7 +36,7 @@ import { ensureBackgroundLocationRegistered } from '@/services/backgroundLocatio
 import { AdhanAlarmModal } from '@/components/AdhanAlarmModal';
 import { AppLogo } from '@/components/AppLogo';
 import { subscribePrayerFocus, refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
-import { syncMemorizationQueue } from '@/services/memorizationService';
+import { syncMemorizationQueueThrottled } from '@/services/memorizationService';
 
 function openPrayerLockTab() {
   router.push('/(tabs)/prayer-lock' as any);
@@ -41,7 +44,16 @@ function openPrayerLockTab() {
 
 const SAVED_LOCATION_KEY = 'timings_location_v1';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 // Hold the native splash (ivory) on screen until we've decided whether this is a
 // first launch (show the "Preparing your journey" boot screen) or a repeat launch
@@ -77,6 +89,11 @@ function formatSpeed(bytesPerSecond?: number) {
 export default function RootLayout() {
   const hydrate = useAuthStore((s) => s.hydrate);
   const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => s.user?.id);
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const colorScheme = useThemeStore((s) => s.colorScheme);
+  const themeColors = useMemo(() => getColors(colorScheme), [colorScheme]);
+  useNightBrightness();
   const [bootDone, setBootDone] = useState(false);
   // null = still deciding; true = first launch (show boot screen); false = repeat
   // launch (skip boot screen entirely).
@@ -98,7 +115,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydrateTheme().catch(() => undefined);
+  }, [hydrate, hydrateTheme]);
 
   // Decide boot work up front — in parallel with font loading — so repeat launches
   // don't wait: fonts → then AsyncStorage → then home.
@@ -121,15 +139,15 @@ export default function RootLayout() {
     return subscribePrayerFocus(() => undefined);
   }, []);
 
-  // Sync offline memorization marks when the app returns to the foreground.
+  // Sync offline memorization marks when the app returns to the foreground (throttled).
   useEffect(() => {
-    if (!token) return;
-    syncMemorizationQueue(token).catch(() => undefined);
+    if (!token || !userId) return;
+    syncMemorizationQueueThrottled(token, userId, { force: true }).catch(() => undefined);
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncMemorizationQueue(token).catch(() => undefined);
+      if (state === 'active') syncMemorizationQueueThrottled(token, userId).catch(() => undefined);
     });
     return () => sub.remove();
-  }, [token]);
+  }, [token, userId]);
 
   // Finish Quran download quietly if a prior launch sent the user home early.
   useEffect(() => {
@@ -170,6 +188,14 @@ export default function RootLayout() {
 
       Notifications.setNotificationHandler({
         handleNotification: async (notification) => {
+          if (isQuranFocusActive()) {
+            return {
+              shouldShowBanner: false,
+              shouldShowList: false,
+              shouldPlaySound: false,
+              shouldSetBadge: false,
+            };
+          }
           const data = notification.request.content.data as Record<string, unknown>;
           const isAdhan = data?.type === 'adhan';
           if (isAdhan) {
@@ -387,11 +413,11 @@ export default function RootLayout() {
         onLayout={onLayoutRootView}
       >
         <View style={styles.bootStarTop}>
-          <EightPointStar size={26} color={colors.goldBorder} filled={false} />
+          <EightPointStar size={26} color={themeColors.goldBorder} filled={false} />
         </View>
         <AppLogo height={140} />
         <Text style={styles.bootBismillah}>{'بِسْمِ اللَّهِ'}</Text>
-        <GeometricDivider color={colors.gold} style={{ marginVertical: 14 }} />
+        <GeometricDivider color={themeColors.gold} style={{ marginVertical: 14 }} />
         <Text style={styles.bootTitle}>
           {showHadithPrompt ? 'Almost ready' : 'Preparing your journey…'}
         </Text>
@@ -436,17 +462,18 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={styles.flex} onLayout={onLayoutRootView}>
+    <View style={[styles.flex, { backgroundColor: themeColors.bg }]} onLayout={onLayoutRootView}>
+    <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
     <QueryClientProvider client={queryClient}>
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.primaryDeep },
+          headerStyle: { backgroundColor: themeColors.primaryDeep },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: { fontFamily: 'NotoSerif', fontWeight: '700', fontSize: 18 },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.bg },
+          contentStyle: { backgroundColor: themeColors.bg },
           animation: 'slide_from_right',
-          animationDuration: 280,
+          animationDuration: 320,
           gestureEnabled: true,
           gestureDirection: 'horizontal',
           animationMatchesGesture: true,
@@ -456,13 +483,14 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="quran/index" options={{ title: 'Quran Surahs' }} />
-        <Stack.Screen name="quran/[surah]" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="quran/[surah]" options={{ headerShown: false, animation: 'slide_from_right', animationDuration: 320 }} />
         <Stack.Screen name="hadith/index" options={{ title: 'Hadith Books' }} />
         <Stack.Screen name="hadith/[book]/index" options={{ title: 'Hadith' }} />
         <Stack.Screen name="hadith/[book]/[section]" options={{ title: 'Hadith' }} />
         <Stack.Screen name="qibla" options={{ title: 'Qibla Compass' }} />
         <Stack.Screen name="names/[type]" options={{ title: '99 Names' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="reset-password" options={{ title: 'Reset Password' }} />
         <Stack.Screen name="salah-focus" options={{ title: 'Prayer Lock Setup' }} />
         <Stack.Screen name="blocked" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
       </Stack>
