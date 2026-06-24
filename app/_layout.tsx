@@ -195,17 +195,33 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [token, userId]);
   
+  const achievementsHydrated = useAchievementStore((s) => s.hydrated);
+  const achievementsList = useAchievementStore((s) => s.achievements);
+
   // Hydrate and sync achievements
   useEffect(() => {
     const store = useAchievementStore.getState();
-    store
-      .hydrateAchievements(userId || null)
-      .then(() => AchievementManager.trackEvent('dev_open', 1))
-      .catch(() => undefined);
+    store.hydrateAchievements(userId || null).catch(() => undefined);
     if (token && userId) {
       store.syncWithBackend(token, userId).catch(() => undefined);
     }
   }, [userId, token]);
+
+  // Trigger "Welcome" achievement after 5 minutes of active session
+  useEffect(() => {
+    if (!achievementsHydrated) return;
+
+    // Check if the "Welcome" achievement (dev_1) is already unlocked
+    const welcomeUnlocked = achievementsList.find((a) => a.id === 'dev_1')?.isUnlocked;
+    if (welcomeUnlocked) return;
+
+    // 5 minutes delay (300,000 ms)
+    const timer = setTimeout(() => {
+      AchievementManager.trackEvent('dev_open', 1).catch(() => undefined);
+    }, 300000);
+
+    return () => clearTimeout(timer);
+  }, [achievementsHydrated, achievementsList]);
 
   // Finish Quran download quietly if a prior launch sent the user home early.
   useEffect(() => {

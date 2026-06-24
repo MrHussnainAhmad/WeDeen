@@ -78,6 +78,7 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: 'dev_11', title: 'Taraweeh Builder', description: 'Track 80 Taraweeh rakats', category: 'devotion', tier: 'Gold', targetValue: 80, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'dev_12', title: 'Widget Master', description: 'Mark a prayer as completed directly from the widget', category: 'devotion', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'dev_13', title: 'Halal Explorer', description: 'Search for nearby Halal restaurants or Mosques', category: 'devotion', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'dev_14', title: 'Time Traveler', description: 'Convert a date using the Hijri Converter', category: 'devotion', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
 ];
 
 export const XP_BY_TIER: Record<AchievementTier, number> = {
@@ -163,8 +164,61 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
 
   hydrateAchievements: async (userId: string | null) => {
     const key = userId ? `${CACHE_PREFIX}${userId}` : `${CACHE_PREFIX}guest`;
-    const cached = await AsyncStorage.getItem(key);
+    let cached = await AsyncStorage.getItem(key);
     let loaded = INITIAL_ACHIEVEMENTS;
+
+    if (userId) {
+      // Merge guest achievements to prevent double collection and retain guest progress
+      const guestKey = `${CACHE_PREFIX}guest`;
+      const guestCached = await AsyncStorage.getItem(guestKey);
+      if (guestCached) {
+        try {
+          const guestParsed = JSON.parse(guestCached) as Achievement[];
+          if (Array.isArray(guestParsed)) {
+            let userLoaded = INITIAL_ACHIEVEMENTS;
+            if (cached) {
+              const userParsed = JSON.parse(cached) as Achievement[];
+              if (Array.isArray(userParsed)) {
+                userLoaded = INITIAL_ACHIEVEMENTS.map((initial) => {
+                  const uItem = userParsed.find((p) => p.id === initial.id);
+                  if (uItem) {
+                    return {
+                      ...initial,
+                      currentValue: uItem.currentValue,
+                      isUnlocked: uItem.isUnlocked,
+                      unlockedAt: uItem.unlockedAt,
+                    };
+                  }
+                  return initial;
+                });
+              }
+            }
+
+            loaded = userLoaded.map((userItem) => {
+              const guestItem = guestParsed.find((g) => g.id === userItem.id);
+              if (guestItem) {
+                const mergedUnlocked = userItem.isUnlocked || guestItem.isUnlocked;
+                const mergedValue = Math.max(userItem.currentValue, guestItem.currentValue);
+                const mergedUnlockedAt = userItem.unlockedAt || guestItem.unlockedAt || null;
+                return {
+                  ...userItem,
+                  currentValue: Math.min(mergedValue, userItem.targetValue),
+                  isUnlocked: mergedUnlocked,
+                  unlockedAt: mergedUnlockedAt,
+                };
+              }
+              return userItem;
+            });
+
+            await AsyncStorage.setItem(key, JSON.stringify(loaded));
+            await AsyncStorage.removeItem(guestKey);
+            cached = JSON.stringify(loaded);
+          }
+        } catch (e) {
+          console.error('Error merging guest achievements:', e);
+        }
+      }
+    }
 
     if (cached) {
       try {
@@ -383,6 +437,9 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
         } else if (a.id === 'dev_13' && eventType === 'dev_places') {
           isTargetEvent = true;
           newValue = a.currentValue + value;
+        } else if (a.id === 'dev_14' && eventType === 'dev_hijri_convert') {
+          isTargetEvent = true;
+          newValue = a.currentValue + value;
         }
       }
 
@@ -501,6 +558,17 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
         const merged = current.map((a) => {
           const serverItem = data.achievements.find((sa) => sa.achievementId === a.id);
           if (serverItem) {
+            // Push local achievement if it is more advanced than the server
+            const localHasMore = (a.isUnlocked && !serverItem.isUnlocked) || (a.currentValue > serverItem.currentValue);
+            if (localHasMore) {
+              pushAchievementSync(token, userId, {
+                achievementId: a.id,
+                currentValue: a.currentValue,
+                isUnlocked: a.isUnlocked,
+                unlockedAt: a.unlockedAt,
+              }).catch(() => undefined);
+            }
+
             const isUnlocked = a.isUnlocked || serverItem.isUnlocked;
             const currentValue = Math.max(a.currentValue, serverItem.currentValue);
             const unlockedAt = a.unlockedAt || serverItem.unlockedAt;
@@ -513,6 +581,16 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
                 currentValue,
                 unlockedAt,
               };
+            }
+          } else {
+            // Push if the achievement is not on the server but we have progress locally
+            if (a.isUnlocked || a.currentValue > 0) {
+              pushAchievementSync(token, userId, {
+                achievementId: a.id,
+                currentValue: a.currentValue,
+                isUnlocked: a.isUnlocked,
+                unlockedAt: a.unlockedAt,
+              }).catch(() => undefined);
             }
           }
           return a;

@@ -24,6 +24,7 @@ export function PrayerWidgetPreview() {
   const [snapshot, setSnapshot] = useState<PrayerWidgetSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -48,6 +49,8 @@ export function PrayerWidgetPreview() {
     try {
       await markWidgetPrayerAsPrayed(snapshot.currentPrayer.label, token, userId);
       await refresh();
+      setSuccessMessage(`✓ Marked ${snapshot.currentPrayer.label} as prayed!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
     } finally {
       setMarking(false);
     }
@@ -100,6 +103,12 @@ export function PrayerWidgetPreview() {
             <Text style={styles.timePillText}>{snapshot?.currentTime ?? '--:--'}</Text>
           </View>
         </View>
+
+        {successMessage ? (
+          <View style={[styles.successToast, { backgroundColor: themeColors.primarySoft, borderColor: themeColors.primary }]}>
+            <Text style={[styles.successToastText, { color: themeColors.text }]}>{successMessage}</Text>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.loadingRow}>
@@ -241,4 +250,17 @@ const styles = StyleSheet.create({
   markButtonDisabled: { opacity: 0.65 },
   markText: { color: colors.primaryDeep, fontSize: 13.5, fontWeight: '900' },
   emptyText: { color: colors.onDarkMuted, fontSize: 13, fontWeight: '700', marginTop: 18 },
+  successToast: {
+    marginTop: 12,
+    padding: 8,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successToastText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
 });
+

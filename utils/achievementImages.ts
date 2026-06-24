@@ -45,9 +45,11 @@ export const ACHIEVEMENT_IMAGES: Record<string, any> = {
   dev_7: require('../assets/images/achievments/row5col8.png'),
   dhikr_7: require('../assets/images/achievments/row4col4.png'),
   dev_8: require('../assets/images/achievments/row5col5.png'),
-  dev_9: require('../assets/images/achievments/row5col6.png'),
-  dev_10: require('../assets/images/achievments/row5col7.png'),
-  dev_11: require('../assets/images/achievments/row5col8.png'),
-  dev_12: require('../assets/images/achievments/row1col1.png'),
-  dev_13: require('../assets/images/achievments/row1col2.png'),
+  dev_9: require('../assets/images/achievments/row6col1.png'),
+  dev_10: require('../assets/images/achievments/row6col2.png'),
+  dev_11: require('../assets/images/achievments/row6col3.png'),
+  dev_12: require('../assets/images/achievments/row6col4.png'),
+  dev_13: require('../assets/images/achievments/row6col5.png'),
+  dev_14: require('../assets/images/achievments/row6col6.png'),
 };
+

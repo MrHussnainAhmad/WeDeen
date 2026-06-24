@@ -22,6 +22,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const prefs = await getUiPreferences();
     await saveUiPreferences({ ...prefs, colorScheme: scheme });
     set({ colorScheme: scheme });
+    try {
+      const { refreshWidgetDataTheme } = require('@/services/prayerTimingUtils');
+      await refreshWidgetDataTheme(scheme);
+    } catch (e) {
+      console.error('Failed to update widget data theme on theme change:', e);
+    }
   },
   toggleColorScheme: async () => {
     const next = get().colorScheme === 'dark' ? 'light' : 'dark';

@@ -57,14 +57,22 @@ const ACTIONS: Action[] = [
   },
 ];
 
-export const QuickActions = React.memo(function QuickActions() {
+interface QuickActionsProps {
+  type: 'top' | 'remaining';
+}
+
+export const QuickActions = React.memo(function QuickActions({ type }: QuickActionsProps) {
+  const actionsToShow = type === 'top'
+    ? ACTIONS.filter(a => a.title === 'Quran/Hadith' || a.title === 'Tasbih & Azkar')
+    : ACTIONS.filter(a => a.title !== 'Quran/Hadith' && a.title !== 'Tasbih & Azkar');
+
   return (
     <View style={styles.grid}>
-      {ACTIONS.map((a, index) => {
+      {actionsToShow.map((a, index) => {
         const emerald = a.tone === 'emerald';
         // With an odd number of actions, let the last card span the full width so
         // the 2-column grid never leaves a lonely, unbalanced trailing card.
-        const isWide = ACTIONS.length % 2 === 1 && index === ACTIONS.length - 1;
+        const isWide = actionsToShow.length % 2 === 1 && index === actionsToShow.length - 1;
         return (
           <View key={a.title} style={[styles.cardSlot, isWide && styles.cardSlotWide]}>
             <Link href={a.href} asChild>

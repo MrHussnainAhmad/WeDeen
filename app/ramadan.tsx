@@ -22,6 +22,55 @@ import {
 } from '@/services/ramadanService';
 import { getTodayStr } from '@/services/prayerTrackerService';
 import { DUAS } from '@/services/duaLibraryService';
+import { useDailyIslamicData } from '@/hooks/useDailyIslamicData';
+
+function getNextSunnahDays(hijriDay?: number | null) {
+  const now = new Date();
+  const result = [];
+  
+  // 1. Check Mondays and Thursdays
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+    const day = d.getDay();
+    if (day === 1 || day === 4) {
+      const isToday = i === 0;
+      result.push({
+        name: day === 1 ? 'Monday Fast' : 'Thursday Fast',
+        date: d,
+        label: isToday ? 'Today' : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+      });
+    }
+  }
+
+  // 2. White Days (13, 14, 15 AH)
+  if (hijriDay) {
+    const whiteDays = [13, 14, 15];
+    for (const wd of whiteDays) {
+      const diff = wd - hijriDay;
+      if (diff >= 0 && diff <= 30) {
+        const d = new Date(now.getTime() + diff * 24 * 60 * 60 * 1000);
+        result.push({
+          name: `White Day (${wd} AH)`,
+          date: d,
+          label: diff === 0 ? 'Today' : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+        });
+      }
+    }
+  }
+  
+  result.sort((a, b) => a.date.getTime() - b.date.getTime());
+  const seen = new Set();
+  const unique = [];
+  for (const r of result) {
+    const dateStr = r.date.toDateString();
+    if (!seen.has(dateStr)) {
+      seen.add(dateStr);
+      unique.push(r);
+    }
+  }
+  return unique.slice(0, 3);
+}
+
 
 function formatCountdown(target?: Date | null) {
   if (!target) return '--';
@@ -46,6 +95,34 @@ export default function RamadanScreen() {
   const todayLog = logs[today] ?? { date: today, status: 'pending', taraweehRakats: 0 };
   const stats = useMemo(() => calculateFastingStats(logs), [logs]);
   const ramadanDuas = DUAS.filter((dua) => dua.categoryId === 'ramadan');
+
+  const { data: dailyData } = useDailyIslamicData();
+  const isRamadanMonth = dailyData?.hijriMonthNumber === 9;
+  const hijriDay = dailyData?.hijriDay ? Number(dailyData.hijriDay) : null;
+  const sunnahDays = useMemo(() => getNextSunnahDays(hijriDay), [hijriDay]);
+
+  const todayLabelText = useMemo(() => {
+    if (isRamadanMonth) return `Ramadan Day · ${today}`;
+    
+    // Check if today is a Sunnah day
+    const now = new Date(tick);
+    const day = now.getDay();
+    const isMondayOrThursday = day === 1 || day === 4;
+    const hDay = Number(dailyData?.hijriDay);
+    const isWhiteDay = hDay === 13 || hDay === 14 || hDay === 15;
+    
+    if (isMondayOrThursday && isWhiteDay) {
+      return `Sunnah Fast (Monday/Thursday & White Day) · ${today}`;
+    }
+    if (isMondayOrThursday) {
+      return `Sunnah Fast (${day === 1 ? 'Monday' : 'Thursday'}) · ${today}`;
+    }
+    if (isWhiteDay) {
+      return `Sunnah Fast (White Day - ${hDay} AH) · ${today}`;
+    }
+    return `Voluntary Fast · ${today}`;
+  }, [isRamadanMonth, dailyData?.hijriDay, today, tick]);
+
 
   useEffect(() => {
     getFastingLogs().then(setLogs).catch(() => undefined);
@@ -93,8 +170,12 @@ export default function RamadanScreen() {
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </PressableScale>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Ramadan & Fasting</Text>
-          <Text style={styles.headerText}>Suhoor, iftar, fast tracking, Taraweeh, and Ramadan reminders.</Text>
+          <Text style={styles.headerTitle}>{isRamadanMonth ? 'Ramadan & Fasting' : 'Sunnah & Voluntary Fasting'}</Text>
+          <Text style={styles.headerText}>
+            {isRamadanMonth
+              ? 'Suhoor, iftar, fast tracking, Taraweeh, and Ramadan reminders.'
+              : 'Track voluntary fasts, view recommended Sunnah days, and see Suhoor/Iftar times.'}
+          </Text>
         </View>
       </View>
 
@@ -112,10 +193,31 @@ export default function RamadanScreen() {
         </View>
       </View>
 
+      {!isRamadanMonth && (
+        <OrnateCard>
+          <SectionHeader
+            title="Recommended Fasting Days"
+            subtitle="Prophet's Sunnah (ﷺ) schedule"
+            icon={<MaterialCommunityIcons name="calendar-heart" size={18} color={colors.primary} />}
+          />
+          <View style={styles.sunnahDaysContainer}>
+            {sunnahDays.map((day, idx) => (
+              <View key={idx} style={[styles.sunnahDayRow, idx < sunnahDays.length - 1 && styles.sunnahDayBorder]}>
+                <View style={styles.sunnahDayLeft}>
+                  <MaterialCommunityIcons name="star-crescent" size={16} color={colors.gold} />
+                  <Text style={styles.sunnahDayName}>{day.name}</Text>
+                </View>
+                <Text style={styles.sunnahDayLabel}>{day.label}</Text>
+              </View>
+            ))}
+          </View>
+        </OrnateCard>
+      )}
+
       <OrnateCard>
         <SectionHeader
           title="Today's Fast"
-          subtitle={today}
+          subtitle={todayLabelText}
           icon={<MaterialCommunityIcons name="food-croissant" size={18} color={colors.primary} />}
         />
         <View style={styles.statusRow}>
@@ -134,22 +236,24 @@ export default function RamadanScreen() {
         </View>
       </OrnateCard>
 
-      <OrnateCard>
-        <SectionHeader
-          title="Taraweeh"
-          subtitle="Track rakats for tonight"
-          icon={<MaterialCommunityIcons name="mosque" size={18} color={colors.primary} />}
-        />
-        <View style={styles.taraweehRow}>
-          <PressableScale onPress={() => updateTaraweeh(-2)} style={styles.stepButton}>
-            <Ionicons name="remove" size={18} color={colors.primary} />
-          </PressableScale>
-          <Text style={styles.taraweehCount}>{todayLog.taraweehRakats}</Text>
-          <PressableScale onPress={() => updateTaraweeh(2)} style={styles.stepButton}>
-            <Ionicons name="add" size={18} color={colors.primary} />
-          </PressableScale>
-        </View>
-      </OrnateCard>
+      {isRamadanMonth && (
+        <OrnateCard>
+          <SectionHeader
+            title="Taraweeh"
+            subtitle="Track rakats for tonight"
+            icon={<MaterialCommunityIcons name="mosque" size={18} color={colors.primary} />}
+          />
+          <View style={styles.taraweehRow}>
+            <PressableScale onPress={() => updateTaraweeh(-2)} style={styles.stepButton}>
+              <Ionicons name="remove" size={18} color={colors.primary} />
+            </PressableScale>
+            <Text style={styles.taraweehCount}>{todayLog.taraweehRakats}</Text>
+            <PressableScale onPress={() => updateTaraweeh(2)} style={styles.stepButton}>
+              <Ionicons name="add" size={18} color={colors.primary} />
+            </PressableScale>
+          </View>
+        </OrnateCard>
+      )}
 
       <OrnateCard>
         <SectionHeader
@@ -163,26 +267,28 @@ export default function RamadanScreen() {
         </View>
       </OrnateCard>
 
-      <OrnateCard>
-        <SectionHeader
-          title="Ramadan Mode"
-          subtitle="A warmer app mood for the month"
-          icon={<MaterialCommunityIcons name="star-crescent" size={18} color={colors.primary} />}
-        />
-        <View style={styles.switchRow}>
-          <Text style={styles.switchText}>{mode ? 'Ramadan mode on' : 'Ramadan mode off'}</Text>
-          <Switch
-            value={mode}
-            onValueChange={toggleMode}
-            trackColor={{ false: '#C9D7D1', true: colors.primary }}
-            thumbColor={mode ? colors.gold : '#fff'}
+      {isRamadanMonth && (
+        <OrnateCard>
+          <SectionHeader
+            title="Ramadan Mode"
+            subtitle="A warmer app mood for the month"
+            icon={<MaterialCommunityIcons name="star-crescent" size={18} color={colors.primary} />}
           />
-        </View>
-      </OrnateCard>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchText}>{mode ? 'Ramadan mode on' : 'Ramadan mode off'}</Text>
+            <Switch
+              value={mode}
+              onValueChange={toggleMode}
+              trackColor={{ false: '#C9D7D1', true: colors.primary }}
+              thumbColor={mode ? colors.gold : '#fff'}
+            />
+          </View>
+        </OrnateCard>
+      )}
 
       <OrnateCard>
         <SectionHeader
-          title="Ramadan Duas"
+          title={isRamadanMonth ? "Ramadan Duas" : "Fasting Duas"}
           icon={<MaterialCommunityIcons name="hands-pray" size={18} color={colors.primary} />}
         />
         {ramadanDuas.map((dua) => (
@@ -196,6 +302,7 @@ export default function RamadanScreen() {
           <Text style={styles.duaButtonText}>Open full Duas library</Text>
         </PressableScale>
       </OrnateCard>
+
     </ScrollView>
   );
 }
@@ -303,4 +410,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   duaButtonText: { color: '#fff', fontWeight: '900' },
+  sunnahDaysContainer: {
+    marginTop: 4,
+    gap: 12,
+  },
+  sunnahDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  sunnahDayBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSoft,
+    paddingBottom: 10,
+  },
+  sunnahDayLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sunnahDayName: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  sunnahDayLabel: {
+    color: colors.muted,
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
 });

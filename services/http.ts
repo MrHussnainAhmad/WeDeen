@@ -1,39 +1,21 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 
-const getLocalBaseUrl = () => {
-  // If explicitly overridden via environment variable, always honor that.
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
+const DEPLOYED_API_BASE_URL = 'https://wedeen-backend.vercel.app/api';
 
-  // Detect the IP address of the computer running Metro.
-  // Constants.expoConfig?.hostUri is present when running in Expo Go or development builds.
-  // E.g. "192.168.1.10:8081"
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && !ip.startsWith('localhost') && !ip.startsWith('127.0.0.1')) {
-      return `http://${ip}:5000/api`;
-    }
-  }
-
-  // Fallbacks if hostUri is not available:
-  // - Android emulator uses 10.0.2.2 to access the host machine's localhost.
-  // - iOS simulator or web browser uses localhost directly.
-  return Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
+const getApiBaseUrl = () => {
+  const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  return configuredUrl || DEPLOYED_API_BASE_URL;
 };
 
-const LOCAL_API_BASE = getLocalBaseUrl();
+const API_BASE_URL = getApiBaseUrl();
 
 // Log the API base URL in development to help debug
 if (__DEV__) {
-  console.log('[WeDeen HTTP] Base API URL:', LOCAL_API_BASE);
+  console.log('[WeDeen HTTP] Base API URL:', API_BASE_URL);
 }
 
 export const api = axios.create({
-  baseURL: LOCAL_API_BASE,
+  baseURL: API_BASE_URL,
   timeout: 12000
 });
 

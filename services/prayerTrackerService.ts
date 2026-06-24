@@ -172,6 +172,13 @@ export async function markPrayerAsPrayed(
 
   await saveSalahLogs(logs);
 
+  try {
+    const { exportPrayerWidgetSnapshots } = require('./prayerWidgetService');
+    exportPrayerWidgetSnapshots().catch(() => undefined);
+  } catch (e) {
+    // Ignore circular import errors
+  }
+
   // Track achievements
   AchievementManager.trackEvent('salah', 1).catch(() => undefined);
 
@@ -233,6 +240,13 @@ export async function setPrayerStatus(
   };
 
   await saveSalahLogs(logs);
+
+  try {
+    const { exportPrayerWidgetSnapshots } = require('./prayerWidgetService');
+    exportPrayerWidgetSnapshots().catch(() => undefined);
+  } catch (e) {
+    // Ignore circular import errors
+  }
 
   if (status === 'prayed') {
     AchievementManager.trackEvent('salah', 1).catch(() => undefined);

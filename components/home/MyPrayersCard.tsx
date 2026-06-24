@@ -1,18 +1,23 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Alert } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useThemeColors } from '@/theme/useThemeColors';
 import { PressableScale } from '@/components/Anim';
-import { getSalahLogs, getTodayStr, calculateStreakStats, type DaySalahLog } from '@/services/prayerTrackerService';
+import { getSalahLogs, getTodayStr, calculateStreakStats, setPrayerStatus, type DaySalahLog } from '@/services/prayerTrackerService';
 import { type PrayerLabel } from '@/services/prayerTimingUtils';
+import { useAuthStore } from '@/store/authStore';
 
 export const MyPrayersCard = React.memo(function MyPrayersCard() {
   const themeColors = useThemeColors();
   const [todayLog, setTodayLog] = useState<Partial<DaySalahLog>>({});
   const [streak, setStreak] = useState<number>(0);
+  
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+  const userId = user?.id;
 
   const loadData = useCallback(async () => {
     try {
@@ -32,6 +37,28 @@ export const MyPrayersCard = React.memo(function MyPrayersCard() {
       return () => undefined;
     }, [loadData])
   );
+
+  const togglePrayer = async (p: PrayerLabel, currentStatus: string) => {
+    if (currentStatus === 'upcoming') {
+      Alert.alert('Upcoming Salah', 'You cannot mark a future prayer as completed.');
+      return;
+    }
+
+    const nextStatus = currentStatus === 'prayed' ? 'missed' : 'prayed';
+    
+    // Update state immediately
+    setTodayLog((prev) => ({
+      ...prev,
+      [p]: { status: nextStatus, timestamp: Date.now() },
+    }));
+
+    try {
+      await setPrayerStatus(p, getTodayStr(), nextStatus, token, userId);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to quick-log prayer on Home card:', err);
+    }
+  };
 
   const obligatory: PrayerLabel[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
@@ -69,10 +96,14 @@ export const MyPrayersCard = React.memo(function MyPrayersCard() {
           const item = todayLog[p];
           const status = item?.status || 'upcoming';
           return (
-            <View key={p} style={styles.prayerCol}>
+            <PressableScale
+              key={p}
+              style={styles.prayerCol}
+              onPress={() => togglePrayer(p, status)}
+            >
               <Text style={[styles.prayerName, { color: themeColors.muted }]}>{p}</Text>
               <View style={styles.iconWrap}>{getStatusIcon(status)}</View>
-            </View>
+            </PressableScale>
           );
         })}
       </View>
@@ -86,6 +117,11 @@ export const MyPrayersCard = React.memo(function MyPrayersCard() {
         <Text style={[styles.streakText, { color: themeColors.text }]}>
           {streak > 0 ? `${streak} day streak` : 'Start your streak today!'}
         </Text>
+        {!user && (
+          <Text style={[styles.guestWarningText, { color: themeColors.muted }]}>
+            (Guest session — sign in to sync)
+          </Text>
+        )}
       </View>
     </PressableScale>
   );
@@ -147,4 +183,10 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
   },
+  guestWarningText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    marginLeft: 'auto',
+  },
 });
+

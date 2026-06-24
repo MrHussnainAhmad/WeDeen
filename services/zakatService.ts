@@ -13,6 +13,9 @@ export type ZakatInput = {
   businessAssets: number;
   liabilities: number;
   nisabThreshold: number;
+  nisabChoice?: 'manual' | 'gold' | 'silver';
+  goldPrice?: number;
+  silverPrice?: number;
 };
 
 export type ZakatCalculation = ZakatInput & {
@@ -86,20 +89,36 @@ export async function restoreZakatHistory(token: string) {
 
 export function buildZakatReport(item: ZakatCalculation) {
   const money = (value: number) => `${item.currency} ${value.toFixed(2)}`;
+  const dateStr = new Date(item.createdAt).toLocaleDateString();
+  const nisabDetail = item.nisabChoice === 'gold' 
+    ? `Gold Standard (85g @ ${money(item.goldPrice || 0)}/g)`
+    : item.nisabChoice === 'silver'
+    ? `Silver Standard (595g @ ${money(item.silverPrice || 0)}/g)`
+    : 'Manual Threshold';
+
   return [
-    'WeDeen Zakat Calculation',
-    '',
-    `Cash & Savings: ${money(item.cashSavings)}`,
-    `Gold Value: ${money(item.goldValue)}`,
-    `Silver Value: ${money(item.silverValue)}`,
+    '════════════════════════════════════',
+    '        WeDeen Zakat Report         ',
+    '════════════════════════════════════',
+    `Date: ${dateStr}`,
+    '------------------------------------',
+    `Cash & Savings:       ${money(item.cashSavings)}`,
+    `Gold Value:           ${money(item.goldValue)}`,
+    `Silver Value:         ${money(item.silverValue)}`,
     `Stocks & Investments: ${money(item.investments)}`,
-    `Business Assets: ${money(item.businessAssets)}`,
-    `Liabilities: ${money(item.liabilities)}`,
-    `Nisab Threshold: ${money(item.nisabThreshold)}`,
+    `Business Assets:      ${money(item.businessAssets)}`,
+    `Liabilities:          -${money(item.liabilities)}`,
+    '------------------------------------',
+    `Zakatable Total:      ${money(item.zakatableTotal)}`,
+    `Nisab Standard:       ${nisabDetail}`,
+    `Nisab Limit:          ${money(item.nisabThreshold)}`,
+    '------------------------------------',
+    `ZAKAT DUE (2.5%):     ${money(item.zakatDue)}`,
+    '════════════════════════════════════',
+    `Status: ${item.zakatableTotal >= item.nisabThreshold ? 'OBLIGATORY' : 'Not Obligatory (Below Nisab)'}`,
     '',
-    `Zakatable Total: ${money(item.zakatableTotal)}`,
-    `Zakat Due (2.5%): ${money(item.zakatDue)}`,
-    '',
-    'This is an estimate. Confirm complex assets with a qualified scholar.',
+    'Estimate only. Please verify complex asset categories with a local scholar.',
+    'Calculated using WeDeen App.',
   ].join('\n');
 }
+

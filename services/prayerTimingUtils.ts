@@ -239,11 +239,15 @@ export async function exportWidgetData(
           : "Unknown Location"
       : null;
 
+    const prefs = await getUiPreferences().catch(() => null);
+    const colorScheme = prefs?.colorScheme || 'light';
+
     const payload = {
       locationName,
       school: schoolName,
       methodName,
       timings,
+      colorScheme,
       lastUpdated: Date.now()
     };
 
@@ -252,3 +256,22 @@ export async function exportWidgetData(
     console.error('Failed to export widget data:', err);
   }
 }
+
+export async function refreshWidgetDataTheme(scheme: 'light' | 'dark') {
+  try {
+    const targetPath = `${FileSystem.documentDirectory}widget_data.json`;
+    const info = await FileSystem.getInfoAsync(targetPath);
+    if (info.exists) {
+      const raw = await FileSystem.readAsStringAsync(targetPath);
+      const parsed = JSON.parse(raw);
+      if (parsed) {
+        parsed.colorScheme = scheme;
+        parsed.lastUpdated = Date.now();
+        await FileSystem.writeAsStringAsync(targetPath, JSON.stringify(parsed));
+      }
+    }
+  } catch (err) {
+    console.error('Failed to update widget theme in JSON:', err);
+  }
+}
+

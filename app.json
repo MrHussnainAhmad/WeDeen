@@ -3,7 +3,7 @@
     "name": "WeDeen",
     "slug": "wedeen",
     "scheme": "wedeen",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "default",
     "platforms": [
       "android"
@@ -21,7 +21,7 @@
         "backgroundColor": "#F8F5EF"
       },
       "package": "com.hussnainahmadsahi.wedeen",
-      "versionCode": 3,
+      "versionCode": 4,
       "backgroundColor": "#F6F1E7",
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
@@ -69,6 +69,7 @@
         }
       ],
       "./plugins/withWedeenPrayerLockAndroid.js",
+      "./plugins/withWedeenPrayerWidgetAndroid.js",
       [
         "expo-notifications",
         {

@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useDailyIslamicData } from '@/hooks/useDailyIslamicData';
 import { usePrayerSnapshot } from '@/hooks/usePrayerSnapshot';
 import { useAuthStore } from '@/store/authStore';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
-import { radius } from '@/theme/colors';
+import { radius, colors, fonts, shadow } from '@/theme/colors';
 import { useThemeColors } from '@/theme/useThemeColors';
-import { TabFadeInView } from '@/components/Anim';
+import { PressableScale, TabFadeInView } from '@/components/Anim';
 import { TabSceneGuard } from '@/components/navigation/TabSceneGuard';
 import { GeometricDivider } from '@/components/IslamicMotifs';
+import { ISLAMIC_EVENTS } from '@/services/hijriCalendarService';
 
 import { GreetingHeader } from '@/components/home/GreetingHeader';
 import { RamadanBanner } from '@/components/home/RamadanBanner';
@@ -35,6 +36,19 @@ export default function HomeScreen() {
 
   const { data, isLoading, isError, refetch, isFetching } = useDailyIslamicData();
   const user = useAuthStore((s) => s.user);
+
+  const upcomingEvents = useMemo(() => {
+    if (!data?.hijriMonthNumber || !data?.hijriDay) return [];
+    const currentMonth = Number(data.hijriMonthNumber);
+    const currentDay = Number(data.hijriDay);
+    return ISLAMIC_EVENTS.filter((event) => {
+      if (event.hijriMonth === currentMonth) {
+        const diff = event.hijriDay - currentDay;
+        return diff >= 0 && diff <= 7;
+      }
+      return false;
+    });
+  }, [data?.hijriMonthNumber, data?.hijriDay]);
 
   // A single 1s clock drives the live countdown. Kept in this parent so only the
   // memoized PrayerCard re-renders each tick — the heavier cards below stay put.
@@ -124,12 +138,31 @@ export default function HomeScreen() {
         <GreetingHeader name={user?.name} hour={greetingHour} />
       </TabFadeInView>
 
-      {/* Ramadan Dashboard Banner */}
-      <TabFadeInView style={styles.section}>
-        <RamadanBanner location={prayer.location} nowTick={nowTick} />
-      </TabFadeInView>
+      {/* Ramadan Dashboard Banner - Render only in Ramadan */}
+      {data?.hijriMonthNumber === 9 && (
+        <TabFadeInView style={styles.section}>
+          <RamadanBanner location={prayer.location} nowTick={nowTick} />
+        </TabFadeInView>
+      )}
 
-      {/* Prayer hero */}
+      {/* Compact Event Banner for Logged-In Users */}
+      {user && upcomingEvents.length > 0 && (
+        <TabFadeInView style={[styles.section, { marginBottom: -10, marginTop: -6 }]}>
+          {(() => {
+            const event = upcomingEvents[0];
+            const diff = event.hijriDay - Number(data?.hijriDay);
+            const dayLabel = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow' : `in ${diff} days`;
+            return (
+              <View style={styles.compactEventRow}>
+                <Text style={styles.compactEventTitle}>{event.title}</Text>
+                <Text style={styles.compactEventDay}>{dayLabel}</Text>
+              </View>
+            );
+          })()}
+        </TabFadeInView>
+      )}
+
+      {/* 1. Prayer hero / Prayer Times Card */}
       <TabFadeInView style={styles.section}>
         <PrayerCard
           entries={prayer.entries}
@@ -142,24 +175,65 @@ export default function HomeScreen() {
         />
       </TabFadeInView>
 
-      {/* My Prayers Card (Logged In only) */}
+      {/* 2. Top Quick Actions: Quran/Hadith, Tasbih & Azkar */}
+      <TabFadeInView style={styles.section}>
+        <QuickActions type="top" />
+      </TabFadeInView>
+
+      {/* 3. My Prayers Today (logged in) OR Hijri Calendar Banner (logged out) */}
       {user ? (
         <TabFadeInView style={styles.section}>
           <MyPrayersCard />
         </TabFadeInView>
-      ) : null}
+      ) : upcomingEvents.length > 0 ? (
+        upcomingEvents.map((event) => {
+          const diff = event.hijriDay - Number(data?.hijriDay);
+          const dayLabel = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow' : `in ${diff} days`;
+          return (
+            <TabFadeInView key={event.id} style={styles.section}>
+              <View style={[styles.eventCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+                <View style={styles.eventIconWrap}>
+                  <Ionicons name="calendar-outline" size={20} color={themeColors.gold} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <Text style={[styles.eventTitle, { color: themeColors.text }]}>{event.title}</Text>
+                    <Text style={[styles.eventDayLabel, { color: themeColors.gold }]}>{dayLabel}</Text>
+                  </View>
+                  <Text style={[styles.eventDesc, { color: themeColors.muted }]}>{event.description}</Text>
+                </View>
+              </View>
+            </TabFadeInView>
+          );
+        })
+      ) : (
+        <TabFadeInView style={styles.section}>
+          <Link href="/hijri" asChild>
+            <PressableScale style={[styles.eventCard, { backgroundColor: themeColors.card, borderColor: themeColors.border, flexDirection: 'row', alignItems: 'center' }]}>
+              <View style={styles.eventIconWrap}>
+                <Ionicons name="calendar-outline" size={20} color={themeColors.gold} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.eventTitle, { color: themeColors.text }]}>Hijri Calendar</Text>
+                <Text style={[styles.eventDesc, { color: themeColors.muted }]}>View current month, converter, & recommended fasting days.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={themeColors.muted} />
+            </PressableScale>
+          </Link>
+        </TabFadeInView>
+      )}
 
-      {/* Quick actions */}
+      {/* 4. Remaining Quick Actions */}
       <TabFadeInView style={styles.section}>
-        <QuickActions />
+        <QuickActions type="remaining" />
       </TabFadeInView>
 
-      {/* Favorite verses */}
+      {/* 5. Favorite Verses */}
       <TabFadeInView style={styles.section}>
         <FavoriteVersesCard index={3} />
       </TabFadeInView>
 
-      {/* Verse of the day */}
+      {/* 6. Verse of the Day */}
       <View style={styles.section}>
         <VerseCard
           index={4}
@@ -169,12 +243,12 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Hadith of the day */}
+      {/* 7. Hadith of the Day */}
       <View style={styles.section}>
         <HadithCard index={5} hadith={data?.hadith ?? 'Hadith unavailable'} />
       </View>
 
-      {/* Azkar rail (full-bleed horizontal scroll) */}
+      {/* 8. Du'a & Azkar */}
       <AzkarRail index={6} items={data?.azkar ?? []} />
 
       {isError ? (
@@ -216,5 +290,56 @@ const styles = StyleSheet.create({
     fontFamily: 'KFGQPCNastaleeq',
     fontSize: 18,
     lineHeight: 32,
+  },
+  eventCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: radius.lg,
+    padding: 14,
+    borderWidth: 1,
+    ...shadow.card,
+  },
+  eventIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FAF3E1',
+    borderWidth: 1,
+    borderColor: '#E9D9AE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventTitle: {
+    fontSize: 14.5,
+    fontWeight: 'bold',
+    fontFamily: fonts.serif,
+  },
+  eventDayLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  eventDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 3,
+    fontWeight: '600',
+  },
+  compactEventRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  compactEventTitle: {
+    color: '#A8321F', // red
+    fontSize: 12.5,
+    fontWeight: '800',
+    fontFamily: fonts.serif,
+  },
+  compactEventDay: {
+    color: '#A8321F', // red
+    fontSize: 12.5,
+    fontWeight: '800',
   },
 });

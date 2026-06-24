@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import { PressableScale } from '@/components/Anim';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useResponsive } from '@/theme/responsive';
 import { useThemeColors } from '@/theme/useThemeColors';
+import { useDailyIslamicData } from '@/hooks/useDailyIslamicData';
+import { getZakatHistory } from '@/services/zakatService';
 
 type SubAction = {
   href: any;
@@ -113,10 +115,30 @@ export default function HubScreen() {
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
   const themeColors = useThemeColors();
+  
+  const { data: dailyData } = useDailyIslamicData();
+  const [lastZakat, setLastZakat] = useState<string | null>(null);
+
+  useEffect(() => {
+    getZakatHistory()
+      .then((history) => {
+        if (history.length > 0) {
+          const latest = history[0];
+          setLastZakat(`Last calculated: ${latest.currency} ${latest.zakatDue.toFixed(2)}`);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   const config = useMemo(() => {
     return HUB_CONFIGS[type || ''] || HUB_CONFIGS.quran_hadith;
   }, [type]);
+
+  const hijriDateStr = useMemo(() => {
+    if (dailyData?.hijriDate) return dailyData.hijriDate;
+    return null;
+  }, [dailyData]);
+
 
   return (
     <ScrollView
@@ -140,24 +162,47 @@ export default function HubScreen() {
       </View>
 
       {/* Grid of Sub-Actions */}
-      <View style={styles.actionList}>
+      <View style={[styles.actionList, responsive.isTablet && styles.actionListTablet]}>
         {config.actions.map((a) => {
           const emerald = a.tone === 'emerald';
+          const primaryColor = emerald ? themeColors.primary : themeColors.gold;
+          const iconBg = emerald ? themeColors.primarySoft : themeColors.goldSoft;
+          const iconBorder = emerald ? themeColors.primaryTint : themeColors.goldBorder;
+
+          let dynamicSubtitle = a.subtitle;
+          if (a.href === '/hijri' && hijriDateStr) {
+            dynamicSubtitle = `Today: ${hijriDateStr}`;
+          } else if (a.href === '/zakat' && lastZakat) {
+            dynamicSubtitle = lastZakat;
+          }
+
           return (
             <Link key={a.title} href={a.href} asChild>
-              <PressableScale style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+              <PressableScale
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: themeColors.card,
+                    borderColor: themeColors.border,
+                    borderLeftWidth: 4,
+                    borderLeftColor: primaryColor,
+                  },
+                  responsive.isTablet && { width: '48.5%' }
+                ]}
+              >
                 <View
                   style={[
                     styles.iconWrap,
-                    emerald
-                      ? { backgroundColor: colors.primarySoft, borderColor: colors.primaryTint }
-                      : { backgroundColor: colors.goldSoft, borderColor: colors.goldBorder },
+                    {
+                      backgroundColor: iconBg,
+                      borderColor: iconBorder,
+                    },
                   ]}
                 >
                   <MaterialCommunityIcons
                     name={a.icon}
-                    size={26}
-                    color={emerald ? colors.primary : colors.goldDeep}
+                    size={24}
+                    color={emerald ? themeColors.primary : themeColors.goldDeep}
                   />
                 </View>
                 <View style={styles.textWrap}>
@@ -165,19 +210,27 @@ export default function HubScreen() {
                     <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
                       {a.title}
                     </Text>
-                    <Text style={styles.arabic} numberOfLines={1}>
+                    <Text style={[styles.arabic, { color: themeColors.gold }]} numberOfLines={1}>
                       {a.arabic}
                     </Text>
                   </View>
                   <Text style={[styles.subtitle, { color: themeColors.muted }]} numberOfLines={2}>
-                    {a.subtitle}
+                    {dynamicSubtitle}
                   </Text>
                 </View>
-                <View style={styles.arrowWrap}>
+                <View
+                  style={[
+                    styles.arrowWrap,
+                    {
+                      backgroundColor: iconBg,
+                      borderColor: iconBorder,
+                    },
+                  ]}
+                >
                   <Ionicons
                     name="arrow-forward"
                     size={16}
-                    color={emerald ? colors.primary : colors.goldDeep}
+                    color={emerald ? themeColors.primary : themeColors.goldDeep}
                   />
                 </View>
               </PressableScale>
@@ -212,6 +265,11 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 22, fontWeight: '900', fontFamily: fonts.serif },
   headerSubtitle: { color: colors.onDarkMuted, marginTop: 6, fontSize: 13, lineHeight: 18 },
   actionList: { gap: 14 },
+  actionListTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -232,12 +290,14 @@ const styles = StyleSheet.create({
   textWrap: { flex: 1, gap: 4, marginRight: 8 },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   title: { fontWeight: '800', fontSize: 16, fontFamily: fonts.serif },
-  arabic: { color: colors.gold, fontSize: 13, fontFamily: fonts.arabic, lineHeight: 22 },
+  arabic: { fontSize: 13, fontFamily: fonts.arabic, lineHeight: 22 },
   subtitle: { fontSize: 12.5, lineHeight: 18 },
   arrowWrap: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
 });

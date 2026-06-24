@@ -4,7 +4,7 @@ import { Link, useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
@@ -14,6 +14,16 @@ import { OrnateCard, SectionHeader } from '@/components/ui';
 import { getUiPreferences, uiPreferenceDefaults } from '@/utils/preferences';
 import { playManagedAudio } from '@/services/audioManager';
 import { schedulePrayerAdhan } from '@/services/prayerNotificationService';
+import {
+  getIslamicEventForDay,
+  getIslamicEventsForMonth,
+  moonSightingNote,
+  scheduleIslamicEventReminder,
+  convertGregorianToHijri,
+  convertHijriToGregorian,
+  type IslamicEvent,
+} from '@/services/hijriCalendarService';
+import { AchievementManager } from '@/store/achievementStore';
 
 type SavedLocation = {
   mode: 'coords' | 'city';
@@ -457,6 +467,98 @@ export default function TimingsScreen() {
     ? `${formatGregorianLabel(calendarRows[0]?.gregorian)} - ${formatGregorianLabel(calendarRows[calendarRows.length - 1]?.gregorian)}`
     : 'Loading Gregorian range';
 
+  // Date Converter State
+  const [convMode, setConvMode] = useState<'gToH' | 'hToG'>('gToH');
+  const [convDay, setConvDay] = useState(String(new Date().getDate()));
+  const [convMonth, setConvMonth] = useState(String(new Date().getMonth() + 1));
+  const [convYear, setConvYear] = useState(String(new Date().getFullYear()));
+  const [convResult, setConvResult] = useState<string | null>(null);
+  const [convLoading, setConvLoading] = useState(false);
+
+  const monthlyEvents = useMemo(() => {
+    return getIslamicEventsForMonth(calendarMonth);
+  }, [calendarMonth]);
+
+  const getGregorianDateForEvent = (event: IslamicEvent) => {
+    const matchedRow = calendarRows.find((r: any) => Number(r?.hijri?.day) === event.hijriDay);
+    if (!matchedRow) return null;
+    return matchedRow.gregorian?.date;
+  };
+
+  const handleSetReminder = async (event: IslamicEvent) => {
+    const matchedRow = calendarRows.find((r: any) => Number(r?.hijri?.day) === event.hijriDay);
+    if (!matchedRow || !matchedRow.gregorian?.date) {
+      Alert.alert('Reminder unavailable', 'Could not determine Gregorian date for this event.');
+      return;
+    }
+    const [dayStr, monthStr, yearStr] = matchedRow.gregorian.date.split('-');
+    const date = new Date(Number(yearStr), Number(monthStr) - 1, Number(dayStr));
+    
+    try {
+      const id = await scheduleIslamicEventReminder(event, date);
+      if (id) {
+        Alert.alert('Reminder Scheduled', `A reminder notification has been set for ${event.title} on ${matchedRow.gregorian.date} at 9:00 AM.`);
+      } else {
+        Alert.alert('Already Passed', `The date for ${event.title} has already passed.`);
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to schedule reminder. Please check notification permissions.');
+    }
+  };
+
+  const handleConvert = async () => {
+    const d = Number(convDay);
+    const m = Number(convMonth);
+    const y = Number(convYear);
+    if (!d || !m || !y) {
+      Alert.alert('Invalid Date', 'Please enter valid numeric values.');
+      return;
+    }
+    
+    setConvLoading(true);
+    try {
+      if (convMode === 'gToH') {
+        const dateObj = new Date(y, m - 1, d);
+        const data = await convertGregorianToHijri(dateObj);
+        if (data?.hijri) {
+          setConvResult(`${data.hijri.day} ${data.hijri.month.en} ${data.hijri.year} AH (${data.hijri.weekday.en})`);
+          AchievementManager.trackEvent('dev_hijri_convert', 1).catch(() => undefined);
+        } else {
+          setConvResult('Conversion failed.');
+        }
+      } else {
+        const data = await convertHijriToGregorian(d, m, y);
+        if (data?.gregorian) {
+          setConvResult(`${data.gregorian.day} ${data.gregorian.month.en} ${data.gregorian.year} (${data.gregorian.weekday.en})`);
+          AchievementManager.trackEvent('dev_hijri_convert', 1).catch(() => undefined);
+        } else {
+          setConvResult('Conversion failed.');
+        }
+      }
+    } catch {
+      setConvResult('Error communicating with service.');
+    } finally {
+      setConvLoading(false);
+    }
+  };
+
+  const handleToggleConvMode = () => {
+    if (convMode === 'gToH') {
+      setConvMode('hToG');
+      setConvDay(String(timingsQuery.data?.hijriDay || 1));
+      setConvMonth(String(timingsQuery.data?.hijriMonthNumber || 9));
+      setConvYear(String(timingsQuery.data?.hijriYear || 1447));
+      setConvResult(null);
+    } else {
+      setConvMode('gToH');
+      const now = new Date();
+      setConvDay(String(now.getDate()));
+      setConvMonth(String(now.getMonth() + 1));
+      setConvYear(String(now.getFullYear()));
+      setConvResult(null);
+    }
+  };
+
   return (
     <ScrollView
       style={styles.screen}
@@ -664,12 +766,141 @@ export default function TimingsScreen() {
                       <Text style={[styles.gregorianDay, isToday && styles.gregorianDayToday]} numberOfLines={1}>
                         {cell.gregorian?.day} {cell.gregorian?.month?.en?.slice(0, 3)}
                       </Text>
+                      {(() => {
+                        const event = getIslamicEventForDay(Number(cell.hijri?.month?.number), Number(cell.hijri?.day));
+                        if (!event) return null;
+                        const dotColor = event.type === 'eid' ? colors.gold : event.type === 'fasting' ? '#E05A45' : colors.primary;
+                        return (
+                          <View style={[styles.eventDot, { backgroundColor: dotColor }]} />
+                        );
+                      })()}
                     </>
                   ) : null}
                 </View>
               </View>
             );
           })}
+        </View>
+      </OrnateCard>
+
+      {/* ───── Islamic Events this Month ───── */}
+      <OrnateCard index={4}>
+        <SectionHeader
+          title="Islamic Events"
+          subtitle={`Important days in ${calendarMonthName}`}
+          icon={<MaterialCommunityIcons name="star-crescent" size={18} color={colors.primary} />}
+        />
+        {monthlyEvents.length ? (
+          <View style={styles.eventList}>
+            {monthlyEvents.map((event) => {
+              const gregDate = getGregorianDateForEvent(event);
+              return (
+                <View key={event.id} style={styles.eventItem}>
+                  <View style={styles.eventHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.eventItemTitle}>{event.title}</Text>
+                      <Text style={styles.eventItemDate}>
+                        {event.hijriDay} {calendarMonthName} {calendarYear} AH
+                        {gregDate ? ` · (${gregDate})` : ''}
+                      </Text>
+                    </View>
+                    <PressableScale onPress={() => handleSetReminder(event)} style={styles.reminderBtn}>
+                      <Ionicons name="notifications-outline" size={16} color={colors.primary} />
+                      <Text style={styles.reminderBtnText}>Remind</Text>
+                    </PressableScale>
+                  </View>
+                  <Text style={styles.eventItemDesc}>{event.description}</Text>
+                  {event.dua ? (
+                    <View style={styles.eventDuaBox}>
+                      <Text style={styles.eventDuaLabel}>RECOMMENDED DUA / DEED</Text>
+                      <Text style={styles.eventDuaText}>{event.dua}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={styles.emptyEventsText}>No major Islamic events recorded for this month.</Text>
+        )}
+      </OrnateCard>
+
+      {/* ───── Date Converter ───── */}
+      <OrnateCard index={5}>
+        <SectionHeader
+          title="Date Converter"
+          subtitle="Convert between Hijri and Gregorian calendars"
+          icon={<MaterialCommunityIcons name="calendar-sync" size={18} color={colors.primary} />}
+        />
+        <View style={styles.converterWrap}>
+          <View style={styles.convModeHeader}>
+            <PressableScale
+              onPress={handleToggleConvMode}
+              style={styles.convToggleBtn}
+            >
+              <Ionicons name="swap-horizontal" size={14} color={colors.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.convToggleText}>
+                {convMode === 'gToH' ? 'Gregorian ➔ Hijri' : 'Hijri ➔ Gregorian'}
+              </Text>
+            </PressableScale>
+          </View>
+          
+          <View style={styles.convInputsRow}>
+            <View style={styles.convInputCol}>
+              <Text style={styles.convInputLabel}>DAY</Text>
+              <TextInput
+                value={convDay}
+                onChangeText={setConvDay}
+                keyboardType="numeric"
+                style={styles.convInput}
+                placeholder="Day"
+              />
+            </View>
+            <View style={styles.convInputCol}>
+              <Text style={styles.convInputLabel}>MONTH</Text>
+              <TextInput
+                value={convMonth}
+                onChangeText={setConvMonth}
+                keyboardType="numeric"
+                style={styles.convInput}
+                placeholder="Month"
+              />
+            </View>
+            <View style={styles.convInputCol}>
+              <Text style={styles.convInputLabel}>YEAR</Text>
+              <TextInput
+                value={convYear}
+                onChangeText={setConvYear}
+                keyboardType="numeric"
+                style={styles.convInput}
+                placeholder="Year"
+              />
+            </View>
+          </View>
+
+          <PressableScale onPress={handleConvert} disabled={convLoading} style={styles.convSubmitBtn}>
+            <Text style={styles.convSubmitBtnText}>
+              {convLoading ? 'Converting...' : 'Convert Date'}
+            </Text>
+          </PressableScale>
+
+          {convResult ? (
+            <View style={styles.convResultBox}>
+              <Text style={styles.convResultLabel}>CONVERTED RESULT</Text>
+              <Text style={styles.convResultValue}>{convResult}</Text>
+            </View>
+          ) : null}
+        </View>
+      </OrnateCard>
+
+      {/* ───── Moon Sighting Disclaimer ───── */}
+      <OrnateCard index={6}>
+        <View style={styles.disclaimerBox}>
+          <MaterialCommunityIcons name="star-crescent" size={20} color={colors.goldDeep} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.disclaimerTitle}>Moon Sighting Advisory</Text>
+            <Text style={styles.disclaimerBody}>{moonSightingNote(calendarMonthName)}</Text>
+          </View>
         </View>
       </OrnateCard>
 
@@ -1084,5 +1315,195 @@ const styles = StyleSheet.create({
   bottomStar: {
     paddingVertical: 8,
     alignItems: 'center',
+  },
+
+  eventDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    marginTop: 4,
+  },
+
+  // Events
+  eventList: {
+    gap: 12,
+  },
+  eventItem: {
+    backgroundColor: colors.cardAlt,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: radius.md,
+    padding: 12,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  eventItemTitle: {
+    color: colors.primaryDark,
+    fontSize: 14.5,
+    fontWeight: '800',
+    fontFamily: fonts.serif,
+  },
+  eventItemDate: {
+    color: colors.goldDeep,
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  reminderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  reminderBtnText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  eventItemDesc: {
+    color: colors.text,
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  eventDuaBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(230,222,203,0.6)',
+  },
+  eventDuaLabel: {
+    color: colors.goldDeep,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  eventDuaText: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    fontStyle: 'italic',
+  },
+  emptyEventsText: {
+    color: colors.muted,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Converter
+  converterWrap: {
+    gap: 12,
+  },
+  convModeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  convToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  convToggleText: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  convInputsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  convInputCol: {
+    flex: 1,
+    gap: 4,
+  },
+  convInputLabel: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 10.5,
+    letterSpacing: 0.5,
+  },
+  convInput: {
+    backgroundColor: colors.cardAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    color: colors.text,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontSize: 13.5,
+    textAlign: 'center',
+  },
+  convSubmitBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  convSubmitBtnText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 13,
+  },
+  convResultBox: {
+    marginTop: 6,
+    padding: 12,
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    borderRadius: radius.md,
+  },
+  convResultLabel: {
+    color: colors.goldDeep,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  convResultValue: {
+    color: colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+
+  // Disclaimer
+  disclaimerBox: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  disclaimerTitle: {
+    color: colors.primaryDark,
+    fontWeight: '800',
+    fontSize: 13.5,
+    fontFamily: fonts.serif,
+  },
+  disclaimerBody: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+    fontWeight: '600',
   },
 });

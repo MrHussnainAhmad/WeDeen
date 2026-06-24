@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:padding="16dp">
+
+    <!-- Top Row: Current Prayer & Brand Logo -->
+    <LinearLayout
+        android:id="@+id/top_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_alignParentTop="true">
+
+        <TextView
+            android:id="@+id/current_prayer_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Asr Time"
+            android:textColor="#E8F0EB"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="WeDeen"
+            android:textColor="#D4AD3A"
+            android:textSize="14sp"
+            android:textStyle="bold|italic" />
+    </LinearLayout>
+
+    <!-- Bottom Row: Calculation method & school -->
+    <LinearLayout
+        android:id="@+id/bottom_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_alignParentBottom="true">
+
+        <TextView
+            android:id="@+id/metadata_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ISNA - Hanafi"
+            android:textColor="#8FA396"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Center Section: Current Time (Left) & Next Prayer/Countdown (Right) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/top_row"
+        android:layout_above="@id/bottom_row"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp">
+
+        <!-- Current Time (TextClock) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextClock
+                android:id="@+id/widget_clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="hh:mm a"
+                android:format24Hour="HH:mm"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+                
+            <TextView
+                android:id="@+id/location_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Location"
+                android:textColor="#8FA396"
+                android:textSize="12sp"
+                android:ellipsize="end"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <!-- Divider line -->
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="rgba(255,255,255,0.15)"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"/>
+
+        <!-- Next Prayer and Countdown -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.2"
+            android:orientation="vertical"
+            android:gravity="end">
+
+            <TextView
+                android:id="@+id/next_prayer_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Maghrib"
+                android:textColor="#E8F0EB"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/countdown_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="in 1h 23m"
+                android:textColor="#D4AD3A"
+                android:textSize="14sp" />
+
+            <!-- Progress Bar -->
+            <ProgressBar
+                android:id="@+id/prayer_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:layout_marginTop="4dp"
+                android:max="1000"
+                android:progress="0"
+                android:progressTint="#D4AD3A" />
+                
+            <!-- Mark as Prayed Button -->
+            <TextView
+                android:id="@+id/mark_prayed_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mark Prayed"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:background="#26FFFFFF"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>
