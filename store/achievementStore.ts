@@ -47,6 +47,10 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: 'hafiz_2', title: 'Short Surahs', description: 'Mark 10 Surahs as learnt', category: 'hafiz', tier: 'Silver', targetValue: 10, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'hafiz_3', title: 'Juz Amma', description: 'Mark all Surahs of Juz 30 as learnt', category: 'hafiz', tier: 'Gold', targetValue: 37, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'hafiz_4', title: 'Walking Quran', description: 'Mark 50 Surahs as learnt', category: 'hafiz', tier: 'Platinum', targetValue: 50, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'hafiz_5', title: 'Upcoming Hafiz', description: 'Mark 80 Surahs as learnt', category: 'hafiz', tier: 'Gold', targetValue: 80, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'hafiz_6', title: 'Destined to be Hafiz', description: 'Mark 100 Surahs as learnt', category: 'hafiz', tier: 'Gold', targetValue: 100, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'hafiz_7', title: 'Walahi i am done', description: 'Mark 110 Surahs as learnt', category: 'hafiz', tier: 'Platinum', targetValue: 110, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'hafiz_8', title: 'Hafiz', description: 'Mark 114 Surahs as learnt', category: 'hafiz', tier: 'Platinum', targetValue: 114, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
 
   // Dhikr Master
   { id: 'dhikr_1', title: 'First Tasbih', description: 'Complete your first Tasbih set (100)', category: 'dhikr', tier: 'Bronze', targetValue: 100, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
@@ -96,6 +100,14 @@ export function getRankTitle(xp: number): { title: string; icon: string } {
   return { title: 'Seeker', icon: 'search-outline' };
 }
 
+export function getRankProgress(xp: number): { currentLevelXp: number; nextLevelXp: number; percentage: number } {
+  if (xp >= 1000) return { currentLevelXp: 1000, nextLevelXp: 1000, percentage: 100 };
+  if (xp >= 600) return { currentLevelXp: 600, nextLevelXp: 1000, percentage: Math.min(100, Math.round(((xp - 600) / 400) * 100)) };
+  if (xp >= 300) return { currentLevelXp: 300, nextLevelXp: 600, percentage: Math.min(100, Math.round(((xp - 300) / 300) * 100)) };
+  if (xp >= 100) return { currentLevelXp: 100, nextLevelXp: 300, percentage: Math.min(100, Math.round(((xp - 100) / 200) * 100)) };
+  return { currentLevelXp: 0, nextLevelXp: 100, percentage: Math.min(100, Math.round((xp / 100) * 100)) };
+}
+
 type AchievementState = {
   achievements: Achievement[];
   currentUnlock: Achievement | null;
@@ -103,6 +115,7 @@ type AchievementState = {
   totalXp: number;
   rankTitle: string;
   rankIcon: string;
+  rankProgress: { currentLevelXp: number; nextLevelXp: number; percentage: number };
   closeUnlockPopup: () => void;
   trackEvent: (eventType: string, value: number, extraMeta?: string) => Promise<void>;
   hydrateAchievements: (userId: string | null) => Promise<void>;
@@ -159,6 +172,7 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
   totalXp: 0,
   rankTitle: 'Seeker',
   rankIcon: 'search-outline',
+  rankProgress: getRankProgress(0),
 
   closeUnlockPopup: () => set({ currentUnlock: null }),
 
@@ -257,6 +271,7 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
       totalXp: xp,
       rankTitle: rankInfo.title,
       rankIcon: rankInfo.icon,
+      rankProgress: getRankProgress(xp),
       hydrated: true,
     });
   },
@@ -269,12 +284,17 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
       totalXp: 0,
       rankTitle: 'Seeker',
       rankIcon: 'search-outline',
+      rankProgress: getRankProgress(0),
     });
   },
 
   trackEvent: async (eventType: string, value: number, extraMeta?: string) => {
     const { achievements, hydrated } = get();
     if (!hydrated) return;
+
+    const { useAuthStore } = require('./authStore');
+    const activeUserId = useAuthStore.getState()?.user?.id;
+    if (!activeUserId) return; // Strict gating: No guest tracking
 
     let updated = false;
     let unlockedAchievement: any = null;
@@ -350,12 +370,10 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
         isTargetEvent = true;
         if (a.id === 'hafiz_1') {
           newValue = a.currentValue + value;
-        } else if (a.id === 'hafiz_2') {
-          newValue = value; // total memorized count
         } else if (a.id === 'hafiz_3' && extraMeta === 'juz30_complete') {
           newValue = 37;
-        } else if (a.id === 'hafiz_4') {
-          newValue = value; // total memorized count
+        } else {
+          newValue = value; // total memorized count (for hafiz_2, 4, 5, 6, 7, 8)
         }
       } else if (a.id.startsWith('dhikr_') && eventType.startsWith('dhikr_')) {
         if (a.id === 'dhikr_1' && eventType === 'dhikr_tasbih_set') {
@@ -480,6 +498,7 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
         totalXp: xp,
         rankTitle: rankInfo.title,
         rankIcon: rankInfo.icon,
+        rankProgress: getRankProgress(xp),
       });
 
       const { useAuthStore } = require('./authStore'); // dynamically require to avoid circular dependency
@@ -608,6 +627,7 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
             totalXp: xp,
             rankTitle: rankInfo.title,
             rankIcon: rankInfo.icon,
+            rankProgress: getRankProgress(xp),
           });
 
           await AsyncStorage.setItem(`${CACHE_PREFIX}${userId}`, JSON.stringify(merged));

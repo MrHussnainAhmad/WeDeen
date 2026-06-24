@@ -8,16 +8,20 @@ import { useAuthStore } from '@/store/authStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useThemeColors } from '@/theme/useThemeColors';
 import { PressableScale } from '@/components/Anim';
-import { getSalahLogs, getTodayStr, calculateStreakStats, setPrayerStatus, type DaySalahLog } from '@/services/prayerTrackerService';
+import { getSalahLogs, getTodayStr, calculateStreakStats, calculateConsistencyScore, setPrayerStatus, type DaySalahLog } from '@/services/prayerTrackerService';
+import { getSalahFocusTotalCompleted } from '@/services/salahFocusService';
 import { type PrayerLabel } from '@/services/prayerTimingUtils';
 
 export default function PrayerTrackerScreen() {
   const themeColors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { token } = useAuthStore();
   const [logs, setLogs] = useState<Record<string, DaySalahLog>>({});
   const [streakStats, setStreakStats] = useState({ streak: 0, bestStreak: 0 });
   const [thisWeekCount, setThisWeekCount] = useState(0);
   const [mostMissed, setMostMissed] = useState<string>('None');
+  const [consistencyScore, setConsistencyScore] = useState(0);
+  const [focusCompleted, setFocusCompleted] = useState(0);
 
   const obligatory: PrayerLabel[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
@@ -79,6 +83,12 @@ export default function PrayerTrackerScreen() {
         }
       });
       setMostMissed(maxMissedVal > 0 ? maxMissedName : 'None');
+
+      const score = calculateConsistencyScore(savedLogs);
+      setConsistencyScore(score);
+
+      const focusCount = await getSalahFocusTotalCompleted();
+      setFocusCompleted(focusCount);
     } catch (err) {
       console.error('Failed to load prayer tracker data:', err);
     }
@@ -140,6 +150,24 @@ export default function PrayerTrackerScreen() {
   };
 
   const dayNamesShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  if (!token) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.bg, padding: 16, justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="lock-closed-outline" size={48} color={themeColors.muted} style={{ marginBottom: 16 }} />
+        <Text style={[styles.sectionTitle, { color: themeColors.text, textAlign: 'center', marginBottom: 8 }]}>Sign In Required</Text>
+        <Text style={[styles.sectionSubtitle, { color: themeColors.muted, textAlign: 'center', marginBottom: 24 }]}>
+          Sign in to save your progress, track your Salah, and view your worship insights.
+        </Text>
+        <PressableScale
+          style={[styles.signInButton, { backgroundColor: themeColors.primary }]}
+          onPress={() => router.push('/profile')}
+        >
+          <Text style={styles.signInText}>Go to Sign In</Text>
+        </PressableScale>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
@@ -258,6 +286,35 @@ export default function PrayerTrackerScreen() {
             <View style={styles.statInfo}>
               <Text style={[styles.statLabel, { color: themeColors.muted }]}>Most Missed</Text>
               <Text style={[styles.statValue, { color: themeColors.text }]}>{mostMissed}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Worship Insights section */}
+        <Text style={[styles.sectionTitle, styles.statsTitle, { color: themeColors.text }]}>Worship Insights</Text>
+
+        <View style={styles.statsContainer}>
+          {/* Card 4: Consistency Score */}
+          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+            <View style={[styles.statIconWrap, { backgroundColor: themeColors.primarySoft }]}>
+              <Ionicons name="speedometer-outline" size={20} color={themeColors.primary} />
+            </View>
+            <View style={styles.statInfo}>
+              <Text style={[styles.statLabel, { color: themeColors.muted }]}>Consistency Score (30 Days)</Text>
+              <Text style={[styles.statValue, { color: themeColors.text }]}>{consistencyScore}%</Text>
+            </View>
+          </View>
+
+          {/* Card 5: Prayer Lock */}
+          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+            <View style={[styles.statIconWrap, { backgroundColor: themeColors.goldSoft }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={themeColors.goldDeep} />
+            </View>
+            <View style={styles.statInfo}>
+              <Text style={[styles.statLabel, { color: themeColors.muted }]}>Prayer Focus</Text>
+              <Text style={[styles.statValue, { color: themeColors.text }]}>
+                {focusCompleted > 0 ? `Stayed focused during ${focusCompleted} prayers` : 'No focused prayers yet'}
+              </Text>
             </View>
           </View>
         </View>
@@ -412,5 +469,15 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 14,
     fontWeight: '800',
+  },
+  signInButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: radius.md,
+  },
+  signInText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

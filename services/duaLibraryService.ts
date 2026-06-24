@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './http';
 import { playManagedAudio } from './audioManager';
 import { AchievementManager } from '@/store/achievementStore';
+import { useAuthStore } from '@/store/authStore';
 
 const DUA_PROGRESS_KEY = 'wedeen_dua_progress_v1';
 const DUA_AUDIO_PLACEHOLDER = require('@/assets/audio/Allah.m4a');
@@ -135,7 +136,10 @@ async function saveProgress(progress: Record<string, DuaProgress>) {
 }
 
 export async function markDuaRead(dua: DuaItem, token?: string | null) {
+  const { user } = useAuthStore.getState();
   const progress = await getDuaProgress();
+  if (!user) return progress; // Strict gating: Do not save progress for guests
+
   const existing = progress[dua.id];
   progress[dua.id] = {
     duaId: dua.id,
@@ -151,7 +155,10 @@ export async function markDuaRead(dua: DuaItem, token?: string | null) {
 }
 
 export async function toggleDuaFavorite(dua: DuaItem, token?: string | null) {
+  const { user } = useAuthStore.getState();
   const progress = await getDuaProgress();
+  if (!user) return progress; // Strict gating: Do not save progress for guests
+
   const existing = progress[dua.id];
   progress[dua.id] = {
     duaId: dua.id,

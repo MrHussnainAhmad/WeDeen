@@ -14,6 +14,7 @@ export const MyPrayersCard = React.memo(function MyPrayersCard() {
   const themeColors = useThemeColors();
   const [todayLog, setTodayLog] = useState<Partial<DaySalahLog>>({});
   const [streak, setStreak] = useState<number>(0);
+  const [bestStreak, setBestStreak] = useState<number>(0);
   
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
@@ -26,6 +27,7 @@ export const MyPrayersCard = React.memo(function MyPrayersCard() {
       setTodayLog(logs[todayKey] || {});
       const streaks = calculateStreakStats(logs);
       setStreak(streaks.streak);
+      setBestStreak(streaks.bestStreak);
     } catch (err) {
       console.error('Failed to load prayer tracker data on home card:', err);
     }
@@ -115,7 +117,11 @@ export const MyPrayersCard = React.memo(function MyPrayersCard() {
       <View style={styles.streakRow}>
         <Ionicons name="flame" size={16} color="#E05A45" />
         <Text style={[styles.streakText, { color: themeColors.text }]}>
-          {streak > 0 ? `${streak} day streak` : 'Start your streak today!'}
+          {streak > 0 
+            ? `${streak} day streak` 
+            : bestStreak === 0 
+              ? 'Start your streak today!' 
+              : 'Oh shit, you broke your streak, okay'}
         </Text>
         {!user && (
           <Text style={[styles.guestWarningText, { color: themeColors.muted }]}>

@@ -18,6 +18,7 @@ export default function AchievementsScreen() {
   const totalXp = useAchievementStore((s) => s.totalXp);
   const rankTitle = useAchievementStore((s) => s.rankTitle);
   const rankIcon = useAchievementStore((s) => s.rankIcon);
+  const rankProgress = useAchievementStore((s) => s.rankProgress);
 
   // Tabs
   const [selectedCategory, setSelectedCategory] = useState<'all' | AchievementCategory>('all');
@@ -163,17 +164,24 @@ export default function AchievementsScreen() {
         <View style={styles.headerRight} />
       </View>
 
-      {/* Guest Info Banner */}
-      {!user && (
-        <View style={[styles.guestBanner, { backgroundColor: themeColors.goldSoft, borderColor: themeColors.goldBorder }]}>
-          <Ionicons name="cloud-offline-outline" size={18} color={themeColors.goldDeep} />
-          <Text style={[styles.guestBannerText, { color: themeColors.goldDeep }]}>
-            Log in to save your achievements across devices
+      {/* Guest Block */}
+      {!user ? (
+        <View style={styles.guestBlock}>
+          <Ionicons name="ribbon-outline" size={64} color={themeColors.primary} style={{ marginBottom: 16 }} />
+          <Text style={[styles.guestTitle, { color: themeColors.text }]}>Unlock Your Journey</Text>
+          <Text style={[styles.guestDesc, { color: themeColors.muted }]}>
+            Sign in to track your achievements, earn XP, and see your rank grow as you build your habits.
           </Text>
+          <PressableScale
+            style={[styles.loginBtn, { backgroundColor: themeColors.primary }]}
+            onPress={() => router.push('/settings')}
+          >
+            <Text style={styles.loginBtnText}>Sign In / Create Account</Text>
+          </PressableScale>
         </View>
-      )}
-
-      {/* Top summary dashboard */}
+      ) : (
+        <>
+          {/* Top summary dashboard */}
       <View style={[styles.summaryBar, { backgroundColor: themeColors.card, borderBottomColor: themeColors.border }]}>
         <View style={styles.summaryCol}>
           <View style={[styles.summaryIconBox, { backgroundColor: themeColors.primarySoft }]}>
@@ -209,6 +217,22 @@ export default function AchievementsScreen() {
               {unlockedCount} / {achievements.length}
             </Text>
           </View>
+        </View>
+      </View>
+
+      {/* Rank Progress Bar */}
+      <View style={[styles.rankProgressContainer, { backgroundColor: themeColors.card, borderBottomColor: themeColors.border }]}>
+        <View style={styles.rankProgressHeader}>
+          <Text style={[styles.rankProgressLabel, { color: themeColors.muted }]}>Next Rank: {rankProgress.nextLevelXp} XP</Text>
+          <Text style={[styles.rankProgressPercent, { color: themeColors.goldDeep }]}>{rankProgress.percentage}%</Text>
+        </View>
+        <View style={[styles.rankProgressBarTrack, { backgroundColor: themeColors.bgDeep }]}>
+          <View 
+            style={[
+              styles.rankProgressBarFill, 
+              { width: `${rankProgress.percentage}%`, backgroundColor: themeColors.goldDeep }
+            ]} 
+          />
         </View>
       </View>
 
@@ -249,6 +273,8 @@ export default function AchievementsScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
+        </>
+      )}
     </View>
   );
 }
@@ -278,17 +304,33 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serif,
   },
   headerRight: { width: 38 },
-  guestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    gap: 8,
-  },
-  guestBannerText: {
-    fontSize: 12.5,
-    fontWeight: '700',
+  guestBlock: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  guestTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    fontFamily: fonts.serif,
+    marginBottom: 8,
+  },
+  guestDesc: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  loginBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+  },
+  loginBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   summaryBar: {
     flexDirection: 'row',
@@ -324,6 +366,34 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: colors.borderSoft,
     marginHorizontal: 8,
+  },
+  rankProgressContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  rankProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  rankProgressLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rankProgressPercent: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  rankProgressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  rankProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   tabsRow: {
     paddingVertical: 12,

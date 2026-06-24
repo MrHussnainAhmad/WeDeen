@@ -27,6 +27,8 @@ import { AzkarRail } from '@/components/home/AzkarRail';
 import { HomeSkeleton } from '@/components/home/HomeSkeleton';
 import { useResponsive } from '@/theme/responsive';
 import { BannerAdSpace } from '@/components/BannerAdSpace';
+import { useAchievementStore } from '@/store/achievementStore';
+import { getSalahLogs, calculateStreakStats } from '@/services/prayerTrackerService';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -36,6 +38,20 @@ export default function HomeScreen() {
 
   const { data, isLoading, isError, refetch, isFetching } = useDailyIslamicData();
   const user = useAuthStore((s) => s.user);
+  
+  const rankTitle = useAchievementStore((s) => s.rankTitle);
+  const [streak, setStreak] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        getSalahLogs().then((logs) => {
+          const stats = calculateStreakStats(logs);
+          setStreak(stats.streak);
+        }).catch(() => undefined);
+      }
+    }, [user])
+  );
 
   const upcomingEvents = useMemo(() => {
     if (!data?.hijriMonthNumber || !data?.hijriDay) return [];
@@ -144,6 +160,8 @@ export default function HomeScreen() {
           <RamadanBanner location={prayer.location} nowTick={nowTick} />
         </TabFadeInView>
       )}
+
+
 
       {/* Compact Event Banner for Logged-In Users */}
       {user && upcomingEvents.length > 0 && (
@@ -309,6 +327,34 @@ const styles = StyleSheet.create({
     borderColor: '#E9D9AE',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  progressBanner: {
+    flexDirection: 'row',
+    borderRadius: radius.lg,
+    padding: 14,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressBannerCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  progressBannerDivider: {
+    width: 1,
+    height: 32,
+    marginHorizontal: 12,
+    opacity: 0.2,
+  },
+  progressBannerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  progressBannerValue: {
+    fontSize: 14,
+    fontWeight: '800',
   },
   eventTitle: {
     fontSize: 14.5,

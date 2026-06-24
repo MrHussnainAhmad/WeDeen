@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './http';
+import { useAuthStore } from '@/store/authStore';
 
 const STORAGE_KEY = 'wedeen_favorite_ayahs_v1';
 const MAX_FAVORITES = 100;
@@ -64,7 +65,12 @@ export async function toggleFavoriteAyah(entry: Omit<FavoriteAyah, 'savedAt'>): 
   favorites: FavoriteAyah[];
   starred: boolean;
 }> {
+  const { user } = useAuthStore.getState();
   const list = await getFavoriteAyahs();
+  if (!user) {
+    return { favorites: list, starred: false };
+  }
+
   const exists = list.some(
     (f) => f.surahNumber === entry.surahNumber && f.ayahNumber === entry.ayahNumber
   );

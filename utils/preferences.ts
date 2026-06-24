@@ -47,6 +47,7 @@ export type UiPreferences = {
   arabicAyahFontSize: number;
   use24HourTime: boolean;
   adhanAlertsEnabled: boolean;
+  prePrayerRemindersEnabled: boolean;
   /** Adhan playback gain, 0..1. */
   adhanVolume: number;
   /** Opt-in: update location in the background so adhan stays accurate while traveling. */
@@ -67,6 +68,7 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   arabicAyahFontSize: 24,
   use24HourTime: true,
   adhanAlertsEnabled: true,
+  prePrayerRemindersEnabled: false,
   adhanVolume: 1,
   backgroundLocationEnabled: false,
   colorScheme: 'light',
@@ -96,6 +98,10 @@ export async function getUiPreferences(): Promise<UiPreferences> {
         typeof parsed.adhanAlertsEnabled === 'boolean'
           ? parsed.adhanAlertsEnabled
           : DEFAULT_PREFERENCES.adhanAlertsEnabled,
+      prePrayerRemindersEnabled:
+        typeof parsed.prePrayerRemindersEnabled === 'boolean'
+          ? parsed.prePrayerRemindersEnabled
+          : DEFAULT_PREFERENCES.prePrayerRemindersEnabled,
       adhanVolume:
         typeof parsed.adhanVolume === 'number' && parsed.adhanVolume >= 0 && parsed.adhanVolume <= 1
           ? parsed.adhanVolume

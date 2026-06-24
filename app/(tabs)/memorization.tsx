@@ -117,6 +117,14 @@ export default function MemorizationScreen() {
     onSuccess: (data) => {
       queryClient.setQueryData(['learning-progress', token], data);
       if (userId) cacheLearningProgress(userId, data).catch(() => undefined);
+      const completedSurahCount = data.unlockedSurah - 1;
+      if (completedSurahCount > 0) {
+        const { AchievementManager } = require('@/store/achievementStore');
+        AchievementManager.trackEvent('hafiz', completedSurahCount).catch(() => undefined);
+        if (completedSurahCount >= 114) {
+          AchievementManager.trackEvent('hafiz', 37, 'juz30_complete').catch(() => undefined);
+        }
+      }
     },
   });
 

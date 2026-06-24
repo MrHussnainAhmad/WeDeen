@@ -25,6 +25,7 @@ import {
   getSalahFocusExpoGoMessage,
   getSalahFocusLocationRequiredMessage,
   getSalahFocusPermissionsRequiredMessage,
+  getSalahFocusTotalCompleted,
   isSalahFocusSupported,
   saveSalahFocusConfig,
   syncSalahFocusAfterSave,
@@ -65,6 +66,7 @@ export default function SalahFocusScreen() {
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [hasLocation, setHasLocation] = useState(false);
+  const [totalCompleted, setTotalCompleted] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,6 +77,7 @@ export default function SalahFocusScreen() {
       setWindowMinutes(config.windowMinutes);
       setSelectedPackages(config.androidBlockedPackages);
       setHasLocation(await hasPrayerLocationConfigured());
+      setTotalCompleted(await getSalahFocusTotalCompleted());
 
       if (supported) {
         const apps = await listBlockableAndroidApps();
@@ -252,6 +255,15 @@ export default function SalahFocusScreen() {
             </PressableScale>
           </View>
         ) : null}
+
+        {totalCompleted > 0 && (
+          <View style={styles.statsBanner}>
+            <Ionicons name="trophy-outline" size={20} color={colors.goldDeep} />
+            <Text style={styles.statsBannerText}>
+              You have stayed focused during <Text style={{ fontWeight: '900' }}>{totalCompleted} prayers</Text>. Mashallah!
+            </Text>
+          </View>
+        )}
 
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>Enable Prayer Lock</Text>
@@ -437,6 +449,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 12.5,
+  },
+  statsBanner: {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    backgroundColor: colors.goldSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statsBannerText: {
+    flex: 1,
+    color: colors.primaryDeep,
+    fontSize: 13.5,
+    lineHeight: 18,
   },
   hint: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginBottom: 10 },
   minuteRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },

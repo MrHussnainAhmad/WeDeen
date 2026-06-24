@@ -349,10 +349,24 @@ export default function ZakatScreen() {
         <OrnateCard>
           <SectionHeader
             title="History"
-            subtitle="Local first, synced when logged in"
+            subtitle="View your past Zakat calculations"
             icon={<Ionicons name="time-outline" size={18} color={colors.primary} />}
           />
-          {history.length ? (
+          {!token ? (
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} style={{ marginBottom: 8 }} />
+              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, marginBottom: 4 }}>Sign In Required</Text>
+              <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 13, marginBottom: 12 }}>
+                Sign in to save and review your Zakat history across all your devices.
+              </Text>
+              <PressableScale
+                style={[styles.primaryButton, { width: '100%' }]}
+                onPress={() => router.push('/settings')}
+              >
+                <Text style={styles.primaryButtonText}>Sign In / Create Account</Text>
+              </PressableScale>
+            </View>
+          ) : history.length ? (
             <View style={[styles.historyList, responsive.isTablet && styles.historyListTablet]}>
               {history.slice(0, 12).map((item) => (
                 <PressableScale key={item.calculationId} onPress={() => handleHistoryPress(item)} style={[styles.historyItem, responsive.isTablet && { width: '48.5%' }]}>

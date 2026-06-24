@@ -176,10 +176,24 @@ export default function PlacesScreen() {
       <OrnateCard>
         <SectionHeader
           title="Favorites"
-          subtitle="Saved locally and synced when logged in"
+          subtitle="Your saved locations"
           icon={<Ionicons name="star-outline" size={18} color={colors.primary} />}
         />
-        {favorites.length ? (
+        {!token ? (
+          <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+            <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} style={{ marginBottom: 8 }} />
+            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, marginBottom: 4 }}>Sign In Required</Text>
+            <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 13, marginBottom: 12 }}>
+              Sign in to save favorite mosques and halal places across all your devices.
+            </Text>
+            <PressableScale
+              style={[styles.primaryButton, { width: '100%' }]}
+              onPress={() => router.push('/settings')}
+            >
+              <Text style={styles.primaryButtonText}>Sign In / Create Account</Text>
+            </PressableScale>
+          </View>
+        ) : favorites.length ? (
           <View style={[styles.placeList, responsive.isTablet && styles.placeListTablet]}>
             {favorites.slice(0, 5).map((place) => (
               <PlaceCard

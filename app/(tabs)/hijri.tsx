@@ -282,7 +282,30 @@ export default function TimingsScreen() {
   const todayHijriQuery = useQuery({
     queryKey: ['today-hijri-date', todayDateKey],
     queryFn: async () => {
-      const res = await fetch(`https://api.aladhan.com/v1/gToH?date=${todayApiDate()}`);
+      const now = new Date();
+      let calculationDate = now;
+
+      try {
+        const { getSavedLocation } = require('@/services/locationService');
+        const { getSuhoorIftarTimes } = require('@/services/ramadanService');
+        const location = await getSavedLocation();
+        if (location) {
+          const times = await getSuhoorIftarTimes(location, now);
+          if (times?.iftarAt) {
+            if (now.getTime() < times.iftarAt.getTime()) {
+              // Before Maghrib (sunset), display the previous day's Hijri value
+              calculationDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            } else {
+              // After Maghrib (sunset), display the current day's Hijri value
+              calculationDate = now;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to calculate Maghrib rollover in calendar tab:', err);
+      }
+
+      const res = await fetch(`https://api.aladhan.com/v1/gToH?date=${todayApiDate(calculationDate)}`);
       const json = await res.json();
       return json?.data ?? null;
     }
@@ -450,12 +473,28 @@ export default function TimingsScreen() {
     return { ...entries[0], countdown: getCountdownText(tomorrowFajr, nowDate) };
   }, [timingsQuery.data, nowTick]);
 
-  const todayGregorianDate = todayApiDate();
-  const currentHijri = timingsQuery.data?.hijriReadable ?? (
-    todayHijriQuery.data?.hijri
-      ? `${todayHijriQuery.data.hijri.day ?? ''} ${todayHijriQuery.data.hijri.month?.en ?? ''} ${todayHijriQuery.data.hijri.year ?? ''} AH`.trim()
-      : 'Hijri date'
-  );
+  const todayGregorianDate = useMemo(() => {
+    if (todayHijriQuery.data?.gregorian?.date) {
+      return todayHijriQuery.data.gregorian.date;
+    }
+    const now = new Date();
+    if (timingsQuery.data?.maghrib) {
+      try {
+        const maghribTime = parsePrayerDate(timingsQuery.data.maghrib, now);
+        if (now.getTime() < maghribTime.getTime()) {
+          const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          return todayApiDate(yesterday);
+        }
+      } catch (err) {
+        console.warn('Failed to parse Maghrib time for calendar highlight:', err);
+      }
+    }
+    return todayApiDate(now);
+  }, [todayHijriQuery.data?.gregorian?.date, timingsQuery.data?.maghrib, nowTick]);
+
+  const currentHijri = todayHijriQuery.data?.hijri
+    ? `${todayHijriQuery.data.hijri.day ?? ''} ${todayHijriQuery.data.hijri.month?.en ?? ''} ${todayHijriQuery.data.hijri.year ?? ''} AH`.trim()
+    : (timingsQuery.data?.hijriReadable ?? 'Hijri date');
   const currentGregorian = timingsQuery.data?.gregorianReadable ?? formatGregorianLabel(todayHijriQuery.data?.gregorian);
   const calendarRows = monthCalendarQuery.data || [];
   const calendarMonthName =
@@ -463,9 +502,20 @@ export default function TimingsScreen() {
     timingsQuery.data?.hijriMonthName ??
     todayHijriQuery.data?.hijri?.month?.en ??
     'Islamic Month';
-  const calendarGregorianSpan = calendarRows.length
-    ? `${formatGregorianLabel(calendarRows[0]?.gregorian)} - ${formatGregorianLabel(calendarRows[calendarRows.length - 1]?.gregorian)}`
-    : 'Loading Gregorian range';
+  const calendarGregorianSpan = useMemo(() => {
+    if (!calendarRows.length) return 'Loading Gregorian range';
+    const first = calendarRows[0]?.gregorian;
+    const last = calendarRows[calendarRows.length - 1]?.gregorian;
+    if (!first || !last) return '';
+    const firstMonth = first.month?.en?.slice(0, 3) ?? '';
+    const lastMonth = last.month?.en?.slice(0, 3) ?? '';
+    const firstDay = first.day ?? '';
+    const lastDay = last.day ?? '';
+    if (firstMonth === lastMonth) {
+      return `${firstMonth} ${firstDay} - ${lastDay}, ${first.year}`;
+    }
+    return `${firstMonth} ${firstDay} - ${lastMonth} ${lastDay}`;
+  }, [calendarRows]);
 
   // Date Converter State
   const [convMode, setConvMode] = useState<'gToH' | 'hToG'>('gToH');

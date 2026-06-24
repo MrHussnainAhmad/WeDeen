@@ -112,6 +112,15 @@ export async function saveSalahFocusConfig(patch: Partial<SalahFocusConfig>) {
   return next;
 }
 
+export async function getSalahFocusTotalCompleted(): Promise<number> {
+  const config = await getSalahFocusConfig();
+  let count = 0;
+  for (const dateKey in config.completedByDate) {
+    count += config.completedByDate[dateKey].length;
+  }
+  return count;
+}
+
 async function getSavedPrayerLocation(): Promise<PrayerLocation | null> {
   try {
     const raw = await AsyncStorage.getItem(LOCATION_KEY);

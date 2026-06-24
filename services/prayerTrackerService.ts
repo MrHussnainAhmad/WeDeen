@@ -157,6 +157,8 @@ export async function markPrayerAsPrayed(
   token?: string | null,
   userId?: string | null
 ) {
+  if (!userId) return; // Strict gating: Do not save progress for guests
+
   const logs = await getSalahLogs();
   if (!logs[dateKey]) {
     logs[dateKey] = {} as DaySalahLog;
@@ -229,6 +231,8 @@ export async function setPrayerStatus(
   token?: string | null,
   userId?: string | null
 ) {
+  if (!userId) return; // Strict gating: Do not save progress for guests
+
   const logs = await getSalahLogs();
   if (!logs[dateKey]) {
     logs[dateKey] = {} as DaySalahLog;
@@ -363,6 +367,115 @@ export function calculateStreakStats(logs: Record<string, DaySalahLog>) {
     bestStreak: bestStreak,
     fajrStreak: activeFajrStreak,
     bestFajrStreak: bestFajrStreak,
+  };
+}
+
+export function calculateConsistencyScore(logs: Record<string, DaySalahLog>): number {
+  const obligatory: PrayerLabel[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  let totalPrayed = 0;
+  let totalExpected = 0;
+
+  const now = new Date();
+  
+  // Calculate over the last 30 days
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const dateKey = getTodayStr(d);
+    
+    // Check if the date is in the past or today
+    const dayLog = logs[dateKey];
+    
+    for (const prayer of obligatory) {
+      const status = dayLog?.[prayer]?.status;
+      // We only count it as expected if it's past/missed or prayed.
+      // We don't penalize for 'upcoming' or 'pending'.
+      if (status === 'prayed') {
+        totalPrayed++;
+        totalExpected++;
+      } else if (status === 'missed') {
+        totalExpected++;
+      } else if (!status && dateKey < getTodayStr(now)) {
+        // If there is no record for a past day, it means it was missed.
+        totalExpected++;
+      }
+    }
+  }
+
+  if (totalExpected === 0) return 0;
+  return Math.round((totalPrayed / totalExpected) * 100);
+}
+
+export function getWorshipInsights(logs: Record<string, DaySalahLog>) {
+  const obligatory: PrayerLabel[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  const score = calculateConsistencyScore(logs);
+  
+  const missedCounts: Record<string, number> = { Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 };
+  const dayPerformance: Record<number, { prayed: number; expected: number }> = {
+    0: { prayed: 0, expected: 0 }, 1: { prayed: 0, expected: 0 }, 2: { prayed: 0, expected: 0 },
+    3: { prayed: 0, expected: 0 }, 4: { prayed: 0, expected: 0 }, 5: { prayed: 0, expected: 0 }, 6: { prayed: 0, expected: 0 },
+  };
+
+  let totalPrayedMonth = 0;
+  let totalPrayedWeek = 0;
+
+  const now = new Date();
+  
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const dateKey = getTodayStr(d);
+    const dayOfWeek = d.getDay();
+    const isPastOrToday = dateKey <= getTodayStr(now);
+    
+    const dayLog = logs[dateKey] || {};
+    
+    for (const prayer of obligatory) {
+      const status = dayLog[prayer]?.status;
+      const isExpected = status === 'missed' || (!status && isPastOrToday && dateKey < getTodayStr(now)) || status === 'prayed';
+      
+      if (isExpected) {
+        dayPerformance[dayOfWeek].expected++;
+        if (status === 'prayed') {
+          dayPerformance[dayOfWeek].prayed++;
+          totalPrayedMonth++;
+          if (i < 7) totalPrayedWeek++;
+        } else {
+          missedCounts[prayer]++;
+        }
+      }
+    }
+  }
+
+  let mostMissed = 'None';
+  let maxMisses = 0;
+  for (const p of obligatory) {
+    if (missedCounts[p] > maxMisses) {
+      maxMisses = missedCounts[p];
+      mostMissed = p;
+    }
+  }
+
+  let bestDay = 'Friday';
+  let bestRate = -1;
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  for (let i = 0; i < 7; i++) {
+    const { prayed, expected } = dayPerformance[i];
+    if (expected > 0) {
+      const rate = prayed / expected;
+      if (rate > bestRate) {
+        bestRate = rate;
+        bestDay = days[i];
+      }
+    }
+  }
+
+  return {
+    consistencyScore: score,
+    mostMissedPrayer: mostMissed === 'None' && score > 0 ? 'None (Perfect!)' : mostMissed,
+    bestDayOfWeek: bestDay,
+    totalPrayedMonth,
+    totalPrayedWeek,
   };
 }
 

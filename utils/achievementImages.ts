@@ -23,6 +23,10 @@ export const ACHIEVEMENT_IMAGES: Record<string, any> = {
   hafiz_2: require('../assets/images/achievments/row3col4.png'),
   hafiz_3: require('../assets/images/achievments/row3col5.png'),
   hafiz_4: require('../assets/images/achievments/row3col6.png'),
+  hafiz_5: require('../assets/images/achievments/row7col1.png'),
+  hafiz_6: require('../assets/images/achievments/row7col2.png'),
+  hafiz_7: require('../assets/images/achievments/row7col3.png'),
+  hafiz_8: require('../assets/images/achievments/row7col4.png'),
   dhikr_1: require('../assets/images/achievments/row3col7.png'),
   dhikr_2: require('../assets/images/achievments/row3col8.png'),
 

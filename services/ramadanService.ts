@@ -3,6 +3,7 @@ import { api } from './http';
 import { getMonthTimings, normalizeTime, parsePrayerDateTime, type PrayerLocation } from './prayerTimingUtils';
 import { getTodayStr } from './prayerTrackerService';
 import { AchievementManager } from '@/store/achievementStore';
+import { useAuthStore } from '@/store/authStore';
 
 const FASTING_LOGS_KEY = 'wedeen_fasting_logs_v1';
 const RAMADAN_MODE_KEY = 'wedeen_ramadan_mode_v1';
@@ -29,7 +30,10 @@ export async function getFastingLogs(): Promise<Record<string, FastingLog>> {
 }
 
 export async function saveFastingLog(log: FastingLog, token?: string | null) {
+  const { user } = useAuthStore.getState();
   const logs = await getFastingLogs();
+  if (!user) return logs; // Strict gating: Do not save progress for guests
+
   logs[log.date] = log;
   await AsyncStorage.setItem(FASTING_LOGS_KEY, JSON.stringify(logs));
   if (log.status === 'completed') {

@@ -106,7 +106,7 @@ export default function RootLayout() {
   // launch (skip boot screen entirely).
   const [needsBoot, setNeedsBoot] = useState<boolean | null>(null);
   /** Resolved in parallel with font loading so splash isn't blocked sequentially. */
-  const [bootFlags, setBootFlags] = useState<{ shouldRun: boolean; ask: boolean } | null>(null);
+  const [bootFlags, setBootFlags] = useState<{ shouldRun: boolean; ask: boolean; needsOnboarding: boolean } | null>(null);
   const [showHadithPrompt, setShowHadithPrompt] = useState(false);
   // Live Quran download progress shown on the first-launch boot screen.
   const [quranProgress, setQuranProgress] = useState<QuranDownloadProgress | null>(null);
@@ -132,12 +132,13 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const [shouldRun, ask] = await Promise.all([
+      const [shouldRun, ask, onboardingRaw] = await Promise.all([
         shouldRunBootPreload().catch(() => false),
         shouldAskHadithPredownload().catch(() => false),
+        AsyncStorage.getItem('wedeen_has_seen_onboarding_v1').catch(() => null),
         Asset.loadAsync(Object.values(ACHIEVEMENT_IMAGES)).catch(() => undefined),
       ]);
-      if (mounted) setBootFlags({ shouldRun, ask });
+      if (mounted) setBootFlags({ shouldRun, ask, needsOnboarding: onboardingRaw !== 'true' });
     })();
     return () => {
       mounted = false;
@@ -228,7 +229,13 @@ export default function RootLayout() {
     if (!bootDone) return;
     warmQuranCacheInBackground().catch(() => undefined);
     continueBootPreloadInBackground().catch(() => undefined);
-  }, [bootDone]);
+    
+    // Redirect to Onboarding if needed
+    if (bootFlags?.needsOnboarding && !showHadithPrompt) {
+      setBootFlags((prev) => prev ? { ...prev, needsOnboarding: false } : null);
+      setTimeout(() => router.replace('/onboarding' as any), 50);
+    }
+  }, [bootDone, bootFlags?.needsOnboarding, showHadithPrompt]);
 
   useEffect(() => {
     // Scheduled notifications + custom sounds don't work in Expo Go.
@@ -557,6 +564,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="hub" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="quran/index" options={{ headerShown: false, title: 'Quran Surahs' }} />
         <Stack.Screen name="quran/[surah]" options={{ headerShown: false, animation: 'slide_from_right', animationDuration: 320 }} />
         <Stack.Screen name="hadith/index" options={{ headerShown: false, title: 'Hadith Books' }} />
@@ -576,6 +584,8 @@ export default function RootLayout() {
         <Stack.Screen name="prayer-tracker" options={{ title: 'My Prayers' }} />
         <Stack.Screen name="achievements" options={{ headerShown: false, title: 'Achievements' }} />
         <Stack.Screen name="favorite-ayahs" options={{ headerShown: false, title: 'Favorite Ayahs' }} />
+        <Stack.Screen name="insights" options={{ headerShown: false, title: 'Worship Insights' }} />
+        <Stack.Screen name="reflections" options={{ headerShown: false, title: 'Daily Reflections' }} />
       </Stack>
       <AdhanAlarmModal />
       <AchievementUnlockModal />

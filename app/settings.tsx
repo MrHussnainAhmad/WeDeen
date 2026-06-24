@@ -103,6 +103,9 @@ export default function SettingsScreen() {
   const [adhanAlertsEnabled, setAdhanAlertsEnabled] = useState(
     uiPreferenceDefaults.adhanAlertsEnabled
   );
+  const [prePrayerRemindersEnabled, setPrePrayerRemindersEnabled] = useState(
+    uiPreferenceDefaults.prePrayerRemindersEnabled
+  );
   const [adhanVolume, setAdhanVolume] = useState(uiPreferenceDefaults.adhanVolume);
   const [backgroundLocationEnabled, setBackgroundLocationEnabled] = useState(
     uiPreferenceDefaults.backgroundLocationEnabled
@@ -247,6 +250,7 @@ export default function SettingsScreen() {
       arabicAyahFontSize,
       use24HourTime,
       adhanAlertsEnabled,
+      prePrayerRemindersEnabled,
       adhanVolume,
       backgroundLocationEnabled,
       colorScheme,
@@ -364,6 +368,7 @@ export default function SettingsScreen() {
           setArabicAyahFontSize(prefs.arabicAyahFontSize);
           setUse24HourTime(prefs.use24HourTime);
           setAdhanAlertsEnabled(prefs.adhanAlertsEnabled);
+          setPrePrayerRemindersEnabled(prefs.prePrayerRemindersEnabled);
           setAdhanVolume(prefs.adhanVolume);
           setBackgroundLocationEnabled(prefs.backgroundLocationEnabled);
           setNightBrightnessEnabled(prefs.nightBrightnessEnabled);
@@ -679,7 +684,22 @@ export default function SettingsScreen() {
             />
           </View>
 
-          <View style={styles.volumeHeaderRow}>
+          <View style={[styles.switchRow, { marginTop: 14 }]}>
+            <Text style={styles.switchText}>
+              {prePrayerRemindersEnabled ? 'Gentle reminder 15 mins before' : 'Pre-prayer reminders off'}
+            </Text>
+            <Switch
+              value={prePrayerRemindersEnabled}
+              onValueChange={(value) => {
+                setPrePrayerRemindersEnabled(value);
+                persistPrayerTimingPrefs({ prePrayerRemindersEnabled: value });
+              }}
+              trackColor={{ false: '#C9D7D1', true: colors.primary }}
+              thumbColor={prePrayerRemindersEnabled ? colors.gold : '#FFFFFF'}
+            />
+          </View>
+
+          <View style={[styles.volumeHeaderRow, { marginTop: 24 }]}>
             <Text style={styles.label}>Adhan Volume</Text>
             <Text style={styles.volumePercent}>{Math.round(adhanVolume * 100)}%</Text>
           </View>

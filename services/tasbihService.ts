@@ -16,6 +16,13 @@ export const PRESET_TASBIHS: TasbihPreset[] = [
   { id: 'subhanallah', name: 'SubhanAllah', arabic: 'سُبْحَانَ اللّٰه', target: 33 },
   { id: 'alhamdulillah', name: 'Alhamdulillah', arabic: 'اَلْحَمْدُ لِلّٰه', target: 33 },
   { id: 'allahuakbar', name: 'AllahuAkbar', arabic: 'اَللّٰهُ أَكْبَر', target: 34 },
+  { id: 'astaghfirullah', name: 'Astaghfirullah', arabic: 'أَسْتَغْفِرُ اللّٰه', target: 100 },
+  { id: 'kalima', name: 'La ilaha illallah', arabic: 'لَا إِلٰهَ إِلَّا اللّٰه', target: 100 },
+  { id: 'salawat', name: 'Durood/Salawat', arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ', target: 100 },
+  { id: 'hawqala', name: 'Hawqala', arabic: 'لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللّٰهِ', target: 100 },
+  { id: 'hasbuna', name: 'Hasbunallah', arabic: 'حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ', target: 100 },
+  { id: 'subhan_bihamdihi', name: 'SubhanAllahi wa bihamdihi', arabic: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ', target: 100 },
+  { id: 'subhan_azeem', name: 'SubhanAllahil Azeem', arabic: 'سُبْحَانَ اللَّهِ الْعَظِيمِ', target: 100 },
 ];
 
 function getTodayStr() {

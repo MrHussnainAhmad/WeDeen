@@ -80,7 +80,29 @@ export function useDailyIslamicData() {
     queryKey: ['daily-islamic-data-v7', localDateKey],
     queryFn: async () => {
       const now = new Date();
-      const today = formatTodayForAladhan(now);
+      let calculationDate = now;
+
+      try {
+        const { getSavedLocation } = require('@/services/locationService');
+        const { getSuhoorIftarTimes } = require('@/services/ramadanService');
+        const location = await getSavedLocation();
+        if (location) {
+          const times = await getSuhoorIftarTimes(location, now);
+          if (times?.iftarAt) {
+            if (now.getTime() < times.iftarAt.getTime()) {
+              // Before Maghrib (sunset), display the previous day's Hijri value
+              calculationDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            } else {
+              // After Maghrib (sunset), display the current day's Hijri value
+              calculationDate = now;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to calculate Maghrib rollover for Hijri calendar:', err);
+      }
+
+      const today = formatTodayForAladhan(calculationDate);
       const dateKey = getLocalDateKey(now);
       const seed = await getOrCreateDeviceSeed();
 
@@ -141,8 +163,9 @@ export function useDailyIslamicData() {
         azkar
       };
     },
-    staleTime: ONE_DAY,
-    gcTime: ONE_DAY,
+    staleTime: 15 * 60 * 1000, // 15 minutes, checks rollover periodically
+    gcTime: 30 * 60 * 1000,
     retry: 1
   });
 }
+

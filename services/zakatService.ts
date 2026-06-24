@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './http';
+import { useAuthStore } from '@/store/authStore';
 import { AchievementManager } from '@/store/achievementStore';
 
 const ZAKAT_HISTORY_KEY = 'wedeen_zakat_history_v1';
@@ -58,12 +59,22 @@ async function saveHistory(items: ZakatCalculation[]) {
   await AsyncStorage.setItem(ZAKAT_HISTORY_KEY, JSON.stringify(items.slice(0, 50)));
 }
 
-export async function saveZakatCalculation(item: ZakatCalculation, token?: string | null) {
-  const existing = await getZakatHistory();
-  const next = [item, ...existing.filter((x) => x.calculationId !== item.calculationId)];
+export async function saveZakatCalculation(
+  item: ZakatCalculation,
+  token?: string | null
+) {
+  const { user } = useAuthStore.getState();
+  const history = await getZakatHistory();
+  if (!user) return history;
+
+  const next = [item, ...history.filter((x) => x.calculationId !== item.calculationId)];
   await saveHistory(next);
   AchievementManager.trackEvent('dev_zakat', 1).catch(() => undefined);
-  if (token) syncZakatHistory(token).catch(() => undefined);
+
+  if (token) {
+    syncZakatHistory(token).catch(() => undefined);
+  }
+
   return next;
 }
 

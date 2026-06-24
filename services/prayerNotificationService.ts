@@ -351,6 +351,7 @@ async function schedulePrayerAdhanInner(
     school: prayerTimingParams.school,
     schoolParam: prayerTimingParams.schoolParam,
     methodId: prayerTimingParams.methodId,
+    prePrayerReminders: prefs.prePrayerRemindersEnabled,
   });
   const previousSignature = await AsyncStorage.getItem(PRAYER_NOTIFICATION_SIGNATURE_KEY);
   if (previousSignature === signature) return true;
@@ -387,6 +388,25 @@ async function schedulePrayerAdhanInner(
       if (!time) continue;
       const target = parsePrayerDateTime(day, time);
       if (target.getTime() <= now.getTime()) continue;
+
+      if (prefs.prePrayerRemindersEnabled) {
+        const preTarget = new Date(target.getTime() - 15 * 60000); // 15 mins before
+        if (preTarget.getTime() > now.getTime()) {
+          const preId = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `Upcoming: ${label}`,
+              body: `It's almost time for ${label} prayer (15 mins).`,
+              priority: Notifications.AndroidNotificationPriority.DEFAULT,
+              data: { type: 'pre_adhan', prayer: label, fireAt: preTarget.getTime() },
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: preTarget,
+            },
+          });
+          ids.push(preId);
+        }
+      }
 
       const id = await Notifications.scheduleNotificationAsync({
         content: {
