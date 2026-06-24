@@ -19,12 +19,14 @@ import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/componen
 import { resetPassword } from '@/services/authService';
 import { fonts, radius, shadow, type ThemeColors } from '@/theme/colors';
 import { useThemeColors } from '@/theme/useThemeColors';
+import { useResponsive } from '@/theme/responsive';
 
 export default function ResetPasswordScreen() {
   const { token: rawToken } = useLocalSearchParams<{ token?: string | string[] }>();
   const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const responsive = useResponsive();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -70,6 +72,7 @@ export default function ResetPasswordScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.container,
+          responsive.centerContent,
           { paddingTop: Math.max(insets.top + 36, 56), paddingBottom: insets.bottom + 30 },
         ]}
         keyboardShouldPersistTaps="handled"

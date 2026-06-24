@@ -44,6 +44,7 @@ import { useAchievementStore, AchievementManager } from '@/store/achievementStor
 import { ACHIEVEMENT_IMAGES } from '@/utils/achievementImages';
 import * as FileSystem from 'expo-file-system/legacy';
 import { markPrayerAsPrayed } from '@/services/prayerTrackerService';
+import { scheduleUpcomingIslamicEventReminders } from '@/services/hijriCalendarService';
 
 function openPrayerLockTab() {
   router.push('/prayer-lock' as any);
@@ -250,6 +251,7 @@ export default function RootLayout() {
     const scheduleAdhans = async () => {
       try {
         await dismissStaleAdhanAlerts();
+        await scheduleUpcomingIslamicEventReminders();
         const raw = await AsyncStorage.getItem(SAVED_LOCATION_KEY);
         if (!raw) return;
         await schedulePrayerAdhan(JSON.parse(raw));
@@ -586,14 +588,11 @@ export default function RootLayout() {
         <Stack.Screen name="favorite-ayahs" options={{ headerShown: false, title: 'Favorite Ayahs' }} />
         <Stack.Screen name="insights" options={{ headerShown: false, title: 'Worship Insights' }} />
         <Stack.Screen name="reflections" options={{ headerShown: false, title: 'Daily Reflections' }} />
+        <Stack.Screen name="guide" options={{ headerShown: false }} />
+        <Stack.Screen name="guide/[id]" options={{ headerShown: false }} />
       </Stack>
       <AdhanAlarmModal />
       <AchievementUnlockModal />
-      <HadithPredownloadPrompt
-        visible={showHadithPrompt}
-        onYes={handleHadithYes}
-        onNo={handleHadithNo}
-      />
     </QueryClientProvider>
     </View>
   );

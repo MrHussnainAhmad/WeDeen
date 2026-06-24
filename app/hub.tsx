@@ -23,6 +23,7 @@ const ALL_TOOLS = [
   { href: { pathname: '/names/[type]', params: { type: 'allah' } }, title: '99 Names of Allah', arabic: 'أسماء الله الحسنى', subtitle: 'Audio & meanings', icon: 'star-four-points-outline' as const, color: '#A0522D', tint: '#F5EDE5', tintBorder: '#E2CDB8' },
   { href: '/zakat', title: 'Zakat Calculator', arabic: 'حاسبة الزكاة', subtitle: 'Obligatory 2.5% Zakat', icon: 'calculator-variant' as const, color: '#5A7040', tint: '#EDF2E8', tintBorder: '#D5E0CC' },
   { href: '/insights', title: 'Insights', arabic: 'رؤى العبادة', subtitle: 'Worship trends', icon: 'chart-pie' as const, color: '#D4830A', tint: '#FDF3E3', tintBorder: '#F0DDBA' },
+  { href: '/guide', title: 'Guide', arabic: 'الدليل', subtitle: 'How to use WeDeen', icon: 'book-information-variant' as const, color: '#4A6572', tint: '#EBEFF1', tintBorder: '#CAD4DA' },
 ];
 
 export default function HubScreen() {
@@ -80,7 +81,7 @@ export default function HubScreen() {
   // Filter tools based on type
   const displayTools = React.useMemo(() => {
     if (type === 'quran_hadith') {
-      return ALL_TOOLS.filter(t => 
+      return ALL_TOOLS.filter(t =>
         ['Read Quran', 'Read Hadith'].includes(t.title)
       ).sort((a, b) => {
         const order = ['Read Quran', 'Read Hadith'];
@@ -88,7 +89,7 @@ export default function HubScreen() {
       });
     }
     if (type === 'tasbih_azkar') {
-      return ALL_TOOLS.filter(t => 
+      return ALL_TOOLS.filter(t =>
         ['Tasbih Counter', 'Duas & Azkar', '99 Names of Allah', 'Zakat Calculator'].includes(t.title)
       ).sort((a, b) => {
         const order = ['Tasbih Counter', 'Duas & Azkar', '99 Names of Allah', 'Zakat Calculator'];
@@ -96,17 +97,17 @@ export default function HubScreen() {
       });
     }
     if (type === 'tools') {
-      return ALL_TOOLS.filter(t => 
-        ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections'].includes(t.title)
+      return ALL_TOOLS.filter(t =>
+        ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections', 'Guide'].includes(t.title)
       ).sort((a, b) => {
-        const order = ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections'];
+        const order = ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections', 'Guide'];
         return order.indexOf(a.title) - order.indexOf(b.title);
       });
     }
     return ALL_TOOLS;
   }, [type]);
 
-  const hubTitle = 
+  const hubTitle =
     type === 'quran_hadith' ? 'Quran & Hadith' :
     type === 'tasbih_azkar' ? 'Tasbih & Azkar' :
     type === 'tools' ? 'Tools' : 'Discover Hub';
@@ -174,63 +175,47 @@ export default function HubScreen() {
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: themeColors.text }]}>{type ? 'Tools' : 'All Tools'}</Text>
 
-        {/* When 4 or fewer tools, render ALL as hero tiles in a 2-col grid */}
-        {displayTools.length <= 4 ? (
-          <View style={styles.heroGrid}>
-            {displayTools.map((a) => (
-              <Link key={a.title} href={a.href as any} asChild>
-                <PressableScale style={[styles.heroTile, { backgroundColor: a.tint, borderColor: a.tintBorder }]}>
-                  <View style={[styles.heroIconCircle, { backgroundColor: a.color }]}>  
-                    <MaterialCommunityIcons name={a.icon} size={26} color="#fff" />
-                  </View>
-                  <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{a.title}</Text>
-                  <Text style={[styles.heroArabic, { color: a.color }]} numberOfLines={1}>{a.arabic}</Text>
-                  <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{a.subtitle}</Text>
-                </PressableScale>
-              </Link>
-            ))}
-          </View>
-        ) : (
-          <>
-            {/* Featured pair — first two tools get large tinted tiles */}
-            <View style={styles.heroPair}>
-              {displayTools.slice(0, 2).map((a) => (
-                <Link key={a.title} href={a.href as any} asChild>
-                  <PressableScale style={[styles.heroTile, { backgroundColor: a.tint, borderColor: a.tintBorder }]}>
-                    <View style={[styles.heroIconCircle, { backgroundColor: a.color }]}>  
-                      <MaterialCommunityIcons name={a.icon} size={26} color="#fff" />
+        <View style={styles.toolsGrid}>
+          {Array.from({ length: Math.ceil(displayTools.length / 2) }).map((_, rowIndex) => {
+            const tool1 = displayTools[rowIndex * 2];
+            const tool2 = displayTools[rowIndex * 2 + 1];
+            const isOddLastRow = !tool2 && displayTools.length % 2 === 1;
+            return (
+              <View key={rowIndex} style={styles.toolRow}>
+                <Link href={tool1.href as any} asChild>
+                  <PressableScale style={[styles.heroTile, isOddLastRow && type === 'tools' && styles.heroTileWide, { backgroundColor: tool1.tint, borderColor: tool1.tintBorder }]}>
+                    <View style={[styles.heroIconCircle, { backgroundColor: tool1.color }]}>  
+                      <MaterialCommunityIcons name={tool1.icon} size={26} color="#fff" />
                     </View>
-                    <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{a.title}</Text>
-                    <Text style={[styles.heroArabic, { color: a.color }]}>{a.arabic}</Text>
-                    <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{a.subtitle}</Text>
+                    <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{tool1.title}</Text>
+                    <Text style={[styles.heroArabic, { color: tool1.color }]} numberOfLines={1}>{tool1.arabic}</Text>
+                    <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{tool1.subtitle}</Text>
                   </PressableScale>
                 </Link>
-              ))}
-            </View>
 
-            {/* Rest — clean horizontal cards */}
-            {displayTools.slice(2).map((a) => (
-              <Link key={a.title} href={a.href as any} asChild>
-                <PressableScale style={[styles.toolCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-                  <View style={[styles.toolIcon, { backgroundColor: a.tint, borderColor: a.tintBorder }]}>
-                    <MaterialCommunityIcons name={a.icon} size={22} color={a.color} />
-                  </View>
-                  <View style={styles.toolBody}>
-                    <Text style={[styles.toolTitle, { color: themeColors.text }]} numberOfLines={1}>{a.title}</Text>
-                    <Text style={[styles.toolSub, { color: themeColors.muted }]} numberOfLines={1}>{a.subtitle}</Text>
-                  </View>
-                  <View style={styles.toolChevron}>
-                    <Ionicons name="chevron-forward" size={16} color={themeColors.faint} />
-                  </View>
-                </PressableScale>
-              </Link>
-            ))}
-          </>
-        )}
+                {tool2 ? (
+                  <Link href={tool2.href as any} asChild>
+                    <PressableScale style={[styles.heroTile, { backgroundColor: tool2.tint, borderColor: tool2.tintBorder, flex: 1 }]}>
+                      <View style={[styles.heroIconCircle, { backgroundColor: tool2.color }]}>  
+                        <MaterialCommunityIcons name={tool2.icon} size={26} color="#fff" />
+                      </View>
+                      <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{tool2.title}</Text>
+                      <Text style={[styles.heroArabic, { color: tool2.color }]} numberOfLines={1}>{tool2.arabic}</Text>
+                      <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{tool2.subtitle}</Text>
+                    </PressableScale>
+                  </Link>
+                ) : (
+                  !isOddLastRow ? <View style={styles.heroTilePlaceholder} /> : null
+                )}
+              </View>
+            );
+          })}
+        </View>
       </View>
     </ScrollView>
   );
 }
+
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
@@ -270,23 +255,28 @@ const styles = StyleSheet.create({
   signInBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 
   /* ── Hero grid ── */
-  heroGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 12,
+  toolsGrid: {
+    gap: 16,
   },
-  heroPair: {
+  toolRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
+    alignItems: 'stretch',
   },
   heroTile: {
-    width: '48%',
+    flex: 1,
+    minHeight: 176,
     borderRadius: radius.xl,
     borderWidth: 1,
     padding: 18,
     gap: 10,
     ...shadow.card,
+  },
+  heroTileWide: {
+    maxWidth: '100%',
+  },
+  heroTilePlaceholder: {
+    flex: 1,
   },
   heroIconCircle: {
     width: 52, height: 52, borderRadius: 16,

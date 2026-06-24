@@ -22,12 +22,14 @@ import Animated, {
 import { colors } from '@/theme/colors';
 import { BannerAdSpace } from '@/components/BannerAdSpace';
 import { getSavedLocation } from '@/services/locationService';
+import { useResponsive } from '@/theme/responsive';
 
 // Ka'bah coordinates (Masjid al-Haram, Makkah).
 const KAABA_LAT = 21.4225;
 const KAABA_LON = 39.8262;
 
-const SIZE = 260; // compass diameter
+const PHONE_COMPASS_SIZE = 260;
+const TABLET_COMPASS_SIZE = 320;
 const toRad = (d: number) => (d * Math.PI) / 180;
 const toDeg = (r: number) => (r * 180) / Math.PI;
 
@@ -71,6 +73,11 @@ function estimateMagneticDeclination(latDeg: number, lonDeg: number): number {
 }
 
 export default function QiblaScreen() {
+  const responsive = useResponsive();
+  const styles = useMemo(
+    () => createStyles(responsive.isTablet ? TABLET_COMPASS_SIZE : PHONE_COMPASS_SIZE),
+    [responsive.isTablet]
+  );
   // ---- React state (display-only — NEVER used in the animation loop) --------
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -277,7 +284,7 @@ export default function QiblaScreen() {
   ] as const;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, responsive.centerContent]}>
       <View style={styles.card}>
         <Text style={styles.title}>Qibla Compass</Text>
         <Text style={styles.sub}>
@@ -390,7 +397,8 @@ export default function QiblaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (SIZE: number) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 16 },
   center: {
@@ -522,4 +530,4 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
   },
-});
+  });

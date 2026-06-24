@@ -161,25 +161,6 @@ export default function HomeScreen() {
         </TabFadeInView>
       )}
 
-
-
-      {/* Compact Event Banner for Logged-In Users */}
-      {user && upcomingEvents.length > 0 && (
-        <TabFadeInView style={[styles.section, { marginBottom: -10, marginTop: -6 }]}>
-          {(() => {
-            const event = upcomingEvents[0];
-            const diff = event.hijriDay - Number(data?.hijriDay);
-            const dayLabel = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow' : `in ${diff} days`;
-            return (
-              <View style={styles.compactEventRow}>
-                <Text style={styles.compactEventTitle}>{event.title}</Text>
-                <Text style={styles.compactEventDay}>{dayLabel}</Text>
-              </View>
-            );
-          })()}
-        </TabFadeInView>
-      )}
-
       {/* 1. Prayer hero / Prayer Times Card */}
       <TabFadeInView style={styles.section}>
         <PrayerCard
@@ -193,22 +174,14 @@ export default function HomeScreen() {
         />
       </TabFadeInView>
 
-      {/* 2. Top Quick Actions: Quran/Hadith, Tasbih & Azkar */}
-      <TabFadeInView style={styles.section}>
-        <QuickActions type="top" />
-      </TabFadeInView>
-
-      {/* 3. My Prayers Today (logged in) OR Hijri Calendar Banner (logged out) */}
-      {user ? (
+      {/* Upcoming Single Event Banner */}
+      {upcomingEvents.length > 0 && (
         <TabFadeInView style={styles.section}>
-          <MyPrayersCard />
-        </TabFadeInView>
-      ) : upcomingEvents.length > 0 ? (
-        upcomingEvents.map((event) => {
-          const diff = event.hijriDay - Number(data?.hijriDay);
-          const dayLabel = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow' : `in ${diff} days`;
-          return (
-            <TabFadeInView key={event.id} style={styles.section}>
+          {(() => {
+            const event = upcomingEvents[0];
+            const diff = event.hijriDay - Number(data?.hijriDay);
+            const dayLabel = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow' : `in ${diff} days`;
+            return (
               <View style={[styles.eventCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
                 <View style={styles.eventIconWrap}>
                   <Ionicons name="calendar-outline" size={20} color={themeColors.gold} />
@@ -221,23 +194,20 @@ export default function HomeScreen() {
                   <Text style={[styles.eventDesc, { color: themeColors.muted }]}>{event.description}</Text>
                 </View>
               </View>
-            </TabFadeInView>
-          );
-        })
-      ) : (
+            );
+          })()}
+        </TabFadeInView>
+      )}
+
+      {/* 2. Top Quick Actions: Quran/Hadith, Tasbih & Azkar */}
+      <TabFadeInView style={styles.section}>
+        <QuickActions type="top" />
+      </TabFadeInView>
+
+      {/* 3. My Prayers Today (logged in) */}
+      {user && (
         <TabFadeInView style={styles.section}>
-          <Link href="/hijri" asChild>
-            <PressableScale style={[styles.eventCard, { backgroundColor: themeColors.card, borderColor: themeColors.border, flexDirection: 'row', alignItems: 'center' }]}>
-              <View style={styles.eventIconWrap}>
-                <Ionicons name="calendar-outline" size={20} color={themeColors.gold} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.eventTitle, { color: themeColors.text }]}>Hijri Calendar</Text>
-                <Text style={[styles.eventDesc, { color: themeColors.muted }]}>View current month, converter, & recommended fasting days.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={themeColors.muted} />
-            </PressableScale>
-          </Link>
+          <MyPrayersCard />
         </TabFadeInView>
       )}
 
@@ -370,22 +340,5 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 3,
     fontWeight: '600',
-  },
-  compactEventRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  compactEventTitle: {
-    color: '#A8321F', // red
-    fontSize: 12.5,
-    fontWeight: '800',
-    fontFamily: fonts.serif,
-  },
-  compactEventDay: {
-    color: '#A8321F', // red
-    fontSize: 12.5,
-    fontWeight: '800',
   },
 });

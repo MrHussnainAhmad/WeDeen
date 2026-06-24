@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Animated, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,6 @@ import { useThemeColors } from '@/theme/useThemeColors';
 import { colors, fonts, radius } from '@/theme/colors';
 import { PressableScale } from '@/components/Anim';
 
-const { width } = Dimensions.get('window');
 export const ONBOARDING_KEY = 'wedeen_has_seen_onboarding_v1';
 
 const SLIDES = [
@@ -41,6 +40,7 @@ const SLIDES = [
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const themeColors = useThemeColors();
+  const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
@@ -79,11 +79,13 @@ export default function OnboardingScreen() {
       >
         {SLIDES.map((slide, i) => (
           <View key={slide.key} style={[styles.slide, { width, paddingTop: insets.top }]}>
-            <View style={[styles.iconContainer, { backgroundColor: themeColors.primarySoft }]}>
-              <Ionicons name={slide.icon} size={80} color={themeColors.primary} />
+            <View style={styles.slideInner}>
+              <View style={[styles.iconContainer, { backgroundColor: themeColors.primarySoft }]}>
+                <Ionicons name={slide.icon} size={80} color={themeColors.primary} />
+              </View>
+              <Text style={[styles.title, { color: themeColors.text }]}>{slide.title}</Text>
+              <Text style={[styles.description, { color: themeColors.muted }]}>{slide.description}</Text>
             </View>
-            <Text style={[styles.title, { color: themeColors.text }]}>{slide.title}</Text>
-            <Text style={[styles.description, { color: themeColors.muted }]}>{slide.description}</Text>
           </View>
         ))}
       </ScrollView>
@@ -128,6 +130,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
+  slideInner: {
+    width: '100%',
+    maxWidth: 520,
+    alignItems: 'center',
+  },
   iconContainer: {
     width: 150,
     height: 150,
@@ -151,6 +158,9 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 24,
     alignItems: 'center',
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   pagination: {
     flexDirection: 'row',

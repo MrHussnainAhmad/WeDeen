@@ -19,6 +19,7 @@ import { useThemeColors } from '@/theme/useThemeColors';
 import { PressableScale } from '@/components/Anim';
 import { GeometricDivider } from '@/components/IslamicMotifs';
 import { AchievementManager } from '@/store/achievementStore';
+import { useResponsive } from '@/theme/responsive';
 
 const HISTORY_KEY = 'quran_search_history_v1';
 
@@ -34,6 +35,7 @@ interface SearchResult {
 export default function QuranSearchScreen() {
   const insets = useSafeAreaInsets();
   const themeColors = useThemeColors();
+  const responsive = useResponsive();
   const router = useRouter();
   const styles = useMemo(() => createStyles(themeColors), [themeColors]);
 
@@ -165,7 +167,7 @@ export default function QuranSearchScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
       {/* Search Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, responsive.centerContent]}>
         <PressableScale onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={22} color={themeColors.text} />
         </PressableScale>
@@ -199,7 +201,7 @@ export default function QuranSearchScreen() {
           data={results}
           keyExtractor={(item, idx) => `${item.surahNumber}:${item.ayahNumber}:${idx}`}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={[{ paddingBottom: insets.bottom + 24 }, responsive.centerContent]}
           ListHeaderComponent={
             <>
               {/* History Block */}

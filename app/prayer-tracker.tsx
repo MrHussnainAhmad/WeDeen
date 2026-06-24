@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useThemeColors } from '@/theme/useThemeColors';
+import { useResponsive } from '@/theme/responsive';
 import { PressableScale } from '@/components/Anim';
 import { getSalahLogs, getTodayStr, calculateStreakStats, calculateConsistencyScore, setPrayerStatus, type DaySalahLog } from '@/services/prayerTrackerService';
 import { getSalahFocusTotalCompleted } from '@/services/salahFocusService';
@@ -15,6 +16,7 @@ import { type PrayerLabel } from '@/services/prayerTimingUtils';
 export default function PrayerTrackerScreen() {
   const themeColors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const { token } = useAuthStore();
   const [logs, setLogs] = useState<Record<string, DaySalahLog>>({});
   const [streakStats, setStreakStats] = useState({ streak: 0, bestStreak: 0 });
@@ -154,6 +156,7 @@ export default function PrayerTrackerScreen() {
   if (!token) {
     return (
       <View style={[styles.container, { backgroundColor: themeColors.bg, padding: 16, justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={[styles.guestPanel, responsive.centerContent]}>
         <Ionicons name="lock-closed-outline" size={48} color={themeColors.muted} style={{ marginBottom: 16 }} />
         <Text style={[styles.sectionTitle, { color: themeColors.text, textAlign: 'center', marginBottom: 8 }]}>Sign In Required</Text>
         <Text style={[styles.sectionSubtitle, { color: themeColors.muted, textAlign: 'center', marginBottom: 24 }]}>
@@ -165,13 +168,14 @@ export default function PrayerTrackerScreen() {
         >
           <Text style={styles.signInText}>Go to Sign In</Text>
         </PressableScale>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, responsive.centerContent]}>
         {/* Week Title */}
         <View style={styles.sectionTitleRow}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Weekly Tracker</Text>
@@ -253,9 +257,9 @@ export default function PrayerTrackerScreen() {
         {/* Statistics section */}
         <Text style={[styles.sectionTitle, styles.statsTitle, { color: themeColors.text }]}>Statistics</Text>
         
-        <View style={styles.statsContainer}>
+        <View style={[styles.statsContainer, responsive.isTablet && styles.statsContainerTablet]}>
           {/* Card 1: Count */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <View style={[styles.statCard, responsive.isTablet && styles.statCardTablet, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
             <View style={[styles.statIconWrap, { backgroundColor: themeColors.primarySoft }]}>
               <Ionicons name="bar-chart-outline" size={20} color={themeColors.primary} />
             </View>
@@ -266,7 +270,7 @@ export default function PrayerTrackerScreen() {
           </View>
 
           {/* Card 2: Streaks */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <View style={[styles.statCard, responsive.isTablet && styles.statCardTablet, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
             <View style={[styles.statIconWrap, { backgroundColor: '#FBEAE6' }]}>
               <Ionicons name="flame-outline" size={20} color="#E05A45" />
             </View>
@@ -279,7 +283,7 @@ export default function PrayerTrackerScreen() {
           </View>
 
           {/* Card 3: Most Missed */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <View style={[styles.statCard, responsive.isTablet && styles.statCardTablet, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
             <View style={[styles.statIconWrap, { backgroundColor: themeColors.goldSoft }]}>
               <Ionicons name="warning-outline" size={20} color={themeColors.goldDeep} />
             </View>
@@ -293,9 +297,9 @@ export default function PrayerTrackerScreen() {
         {/* Worship Insights section */}
         <Text style={[styles.sectionTitle, styles.statsTitle, { color: themeColors.text }]}>Worship Insights</Text>
 
-        <View style={styles.statsContainer}>
+        <View style={[styles.statsContainer, responsive.isTablet && styles.statsContainerTablet]}>
           {/* Card 4: Consistency Score */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <View style={[styles.statCard, responsive.isTablet && styles.statCardTablet, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
             <View style={[styles.statIconWrap, { backgroundColor: themeColors.primarySoft }]}>
               <Ionicons name="speedometer-outline" size={20} color={themeColors.primary} />
             </View>
@@ -325,6 +329,10 @@ export default function PrayerTrackerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  guestPanel: {
+    width: '100%',
+    alignItems: 'center',
+  },
   header: {
     height: 56,
     flexDirection: 'row',
@@ -444,6 +452,10 @@ const styles = StyleSheet.create({
   statsContainer: {
     gap: 10,
   },
+  statsContainerTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
   statCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -451,6 +463,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
     gap: 12,
+  },
+  statCardTablet: {
+    width: '48.5%',
   },
   statIconWrap: {
     width: 40,

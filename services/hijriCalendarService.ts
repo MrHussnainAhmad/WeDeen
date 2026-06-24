@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { ensurePrayerNotificationPermission } from './prayerNotificationService';
 
 export type HijriCalendarDay = {
   hijri?: {
@@ -27,16 +28,45 @@ export type IslamicEvent = {
 };
 
 const HIJRI_CACHE_PREFIX = 'hijri_month_calendar_v1_';
+const ISLAMIC_EVENT_NOTIFICATION_IDS_KEY = 'islamic_event_notification_ids_v1';
+const ISLAMIC_EVENT_NOTIFICATION_SIGNATURE_KEY = 'islamic_event_notification_signature_v1';
 
 export const ISLAMIC_EVENTS: IslamicEvent[] = [
   {
+    id: 'islamic-new-year',
+    title: 'Islamic New Year',
+    hijriMonth: 1,
+    hijriDay: 1,
+    type: 'knowledge',
+    description: 'The first day of Muharram and the beginning of a new Hijri year.',
+    dua: 'Reflect on the Hijrah, renew intentions, and begin the year with worship and gratitude.',
+  },
+  {
+    id: 'tasua',
+    title: '9 Muharram',
+    hijriMonth: 1,
+    hijriDay: 9,
+    type: 'fasting',
+    description: 'The day before Ashura. Many users fast on the 9th and 10th of Muharram.',
+    dua: 'Prepare for Ashura with fasting, repentance, charity, and remembrance.',
+  },
+  {
     id: 'ashura',
-    title: 'Ashura',
+    title: 'Ashura Day',
     hijriMonth: 1,
     hijriDay: 10,
     type: 'fasting',
     description: 'A blessed day in Muharram. Many users fast on this day and the day before or after.',
     dua: 'Use the day for repentance, fasting, charity, and extra remembrance.',
+  },
+  {
+    id: 'mawlid',
+    title: 'Birthday of Prophet (PBUH)',
+    hijriMonth: 3,
+    hijriDay: 12,
+    type: 'knowledge',
+    description: '12 Rabi al-Awwal. A reminder to send salawat and revisit the Seerah of Prophet Muhammad (PBUH).',
+    dua: 'Increase salawat, learn from the Seerah, and renew love for the Messenger of Allah (PBUH).',
   },
   {
     id: 'isra-miraj',
@@ -64,6 +94,15 @@ export const ISLAMIC_EVENTS: IslamicEvent[] = [
     dua: 'Allahumma ballighna Ramadan and accept our fasting and standing.',
   },
   {
+    id: 'ramadan-last-ten',
+    title: 'Last Ten Nights of Ramadan',
+    hijriMonth: 9,
+    hijriDay: 21,
+    type: 'worship',
+    description: 'The last ten nights of Ramadan begin. Increase Quran, dua, charity, and night prayer.',
+    dua: 'Seek Laylatul Qadr often with: Allahumma innaka afuwwun tuhibbul afwa fafu anni.',
+  },
+  {
     id: 'laylatul-qadr',
     title: 'Laylatul Qadr',
     hijriMonth: 9,
@@ -79,6 +118,32 @@ export const ISLAMIC_EVENTS: IslamicEvent[] = [
     hijriDay: 1,
     type: 'eid',
     description: 'A day of gratitude after Ramadan. Remember Zakat al-Fitr before Eid prayer.',
+  },
+  {
+    id: 'shawwal-six',
+    title: 'Six Days of Shawwal',
+    hijriMonth: 10,
+    hijriDay: 2,
+    type: 'fasting',
+    description: 'A reminder to begin the optional six fasts of Shawwal after Eid al-Fitr.',
+    dua: 'Plan gentle, consistent fasting days during Shawwal if you are able.',
+  },
+  {
+    id: 'dhul-hijjah-start',
+    title: 'First Ten Days of Dhul Hijjah',
+    hijriMonth: 12,
+    hijriDay: 1,
+    type: 'worship',
+    description: 'The blessed first ten days of Dhul Hijjah begin. Increase dhikr, fasting, charity, and good deeds.',
+    dua: 'Increase tahleel, takbeer, tahmeed, dua, and sincere repentance.',
+  },
+  {
+    id: 'tarwiyah',
+    title: 'Day of Tarwiyah',
+    hijriMonth: 12,
+    hijriDay: 8,
+    type: 'worship',
+    description: 'The 8th of Dhul Hijjah and the beginning of key Hajj rites.',
   },
   {
     id: 'arafah',
@@ -97,6 +162,14 @@ export const ISLAMIC_EVENTS: IslamicEvent[] = [
     type: 'eid',
     description: 'The day of sacrifice, gratitude, Eid prayer, and remembering Ibrahim عليه السلام.',
   },
+  {
+    id: 'tashreeq-start',
+    title: 'Days of Tashreeq Begin',
+    hijriMonth: 12,
+    hijriDay: 11,
+    type: 'worship',
+    description: 'The Days of Tashreeq begin. Continue takbeer, gratitude, and remembrance after Eid al-Adha.',
+  },
 ];
 
 function cacheKey(month: number, year: number) {
@@ -105,6 +178,18 @@ function cacheKey(month: number, year: number) {
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
+}
+
+function parseGregorianApiDate(date?: string | null) {
+  if (!date) return null;
+  const [day, month, year] = date.split('-').map((part) => Number(part));
+  if (!day || !month || !year) return null;
+  return new Date(year, month - 1, day);
+}
+
+function nextHijriMonth(month: number, year: number) {
+  if (month >= 12) return { month: 1, year: year + 1 };
+  return { month: month + 1, year };
 }
 
 export function getIslamicEventsForMonth(month: number) {
@@ -158,6 +243,9 @@ export function moonSightingNote(monthName?: string) {
 }
 
 export async function scheduleIslamicEventReminder(event: IslamicEvent, date: Date) {
+  const granted = await ensurePrayerNotificationPermission();
+  if (!granted) return null;
+
   const fireAt = new Date(date);
   fireAt.setHours(9, 0, 0, 0);
   if (fireAt.getTime() <= Date.now()) return null;
@@ -175,4 +263,57 @@ export async function scheduleIslamicEventReminder(event: IslamicEvent, date: Da
     },
   });
   return id;
+}
+
+export async function scheduleUpcomingIslamicEventReminders(monthsAhead = 13) {
+  const granted = await ensurePrayerNotificationPermission();
+  if (!granted) return false;
+
+  const today = new Date();
+  const todayHijri = await convertGregorianToHijri(today).catch(() => null);
+  const startMonth = Number(todayHijri?.hijri?.month?.number);
+  const startYear = Number(todayHijri?.hijri?.year);
+  if (!Number.isFinite(startMonth) || !Number.isFinite(startYear)) return false;
+
+  const signature = JSON.stringify({
+    startMonth,
+    startYear,
+    monthsAhead,
+    events: ISLAMIC_EVENTS.map((event) => `${event.id}:${event.hijriMonth}:${event.hijriDay}`),
+  });
+  const previousSignature = await AsyncStorage.getItem(ISLAMIC_EVENT_NOTIFICATION_SIGNATURE_KEY);
+  if (previousSignature === signature) return true;
+
+  const oldIdsRaw = await AsyncStorage.getItem(ISLAMIC_EVENT_NOTIFICATION_IDS_KEY);
+  if (oldIdsRaw) {
+    try {
+      const oldIds = JSON.parse(oldIdsRaw);
+      if (Array.isArray(oldIds)) {
+        await Promise.all(
+          oldIds.map((id) => Notifications.cancelScheduledNotificationAsync(String(id)).catch(() => undefined))
+        );
+      }
+    } catch {
+      // Ignore malformed stored ids and replace them below.
+    }
+  }
+
+  const scheduledIds: string[] = [];
+  let cursor = { month: startMonth, year: startYear };
+
+  for (let i = 0; i < monthsAhead; i += 1) {
+    const events = getIslamicEventsForMonth(cursor.month);
+    for (const event of events) {
+      const converted = await convertHijriToGregorian(event.hijriDay, event.hijriMonth, cursor.year).catch(() => null);
+      const gregorianDate = parseGregorianApiDate(converted?.gregorian?.date);
+      if (!gregorianDate) continue;
+      const id = await scheduleIslamicEventReminder(event, gregorianDate).catch(() => null);
+      if (id) scheduledIds.push(id);
+    }
+    cursor = nextHijriMonth(cursor.month, cursor.year);
+  }
+
+  await AsyncStorage.setItem(ISLAMIC_EVENT_NOTIFICATION_IDS_KEY, JSON.stringify(scheduledIds));
+  await AsyncStorage.setItem(ISLAMIC_EVENT_NOTIFICATION_SIGNATURE_KEY, signature);
+  return scheduledIds.length > 0;
 }

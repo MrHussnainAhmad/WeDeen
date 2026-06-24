@@ -8,6 +8,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-nati
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
+import { useResponsive } from '@/theme/responsive';
 import { EightPointStar, GeometricDivider, StarFieldWatermark } from '@/components/IslamicMotifs';
 import { FadeInView, PressableScale } from '@/components/Anim';
 import { OrnateCard, SectionHeader } from '@/components/ui';
@@ -141,6 +142,7 @@ async function playAdhan() {
 
 export default function TimingsScreen() {
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const [locationLoading, setLocationLoading] = useState(true);
   const [location, setLocation] = useState<SavedLocation | null>(null);
   const [manualCity, setManualCity] = useState('');
@@ -612,7 +614,7 @@ export default function TimingsScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }]}
+      contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
       {/* ───── Next Prayer Hero ───── */}
