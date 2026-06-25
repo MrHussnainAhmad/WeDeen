@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -36,6 +36,7 @@ import { ringAdhan } from '@/services/adhanController';
 import { maybeRefreshLocation } from '@/services/locationService';
 import { ensureBackgroundLocationRegistered } from '@/services/backgroundLocation';
 import { AdhanAlarmModal } from '@/components/AdhanAlarmModal';
+import { CustomAlertProvider } from '@/components/CustomAlertProvider';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
 import { AppLogo } from '@/components/AppLogo';
 import { subscribePrayerFocus, refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
@@ -109,8 +110,10 @@ export default function RootLayout() {
   /** Resolved in parallel with font loading so splash isn't blocked sequentially. */
   const [bootFlags, setBootFlags] = useState<{ shouldRun: boolean; ask: boolean; needsOnboarding: boolean } | null>(null);
   const [showHadithPrompt, setShowHadithPrompt] = useState(false);
+  const [handoffToOnboarding, setHandoffToOnboarding] = useState(false);
   // Live Quran download progress shown on the first-launch boot screen.
   const [quranProgress, setQuranProgress] = useState<QuranDownloadProgress | null>(null);
+  const rootNavigationState = useRootNavigationState();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
   const [fontsLoaded] = useFonts({
@@ -225,18 +228,23 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, [achievementsHydrated, achievementsList]);
 
-  // Finish Quran download quietly if a prior launch sent the user home early.
+  // Finish any optional boot assets quietly after the first-run gate is done.
   useEffect(() => {
     if (!bootDone) return;
     warmQuranCacheInBackground().catch(() => undefined);
     continueBootPreloadInBackground().catch(() => undefined);
-    
-    // Redirect to Onboarding if needed
-    if (bootFlags?.needsOnboarding && !showHadithPrompt) {
-      setBootFlags((prev) => prev ? { ...prev, needsOnboarding: false } : null);
-      setTimeout(() => router.replace('/onboarding' as any), 50);
-    }
-  }, [bootDone, bootFlags?.needsOnboarding, showHadithPrompt]);
+  }, [bootDone]);
+
+  useEffect(() => {
+    if (!bootDone || !bootFlags?.needsOnboarding || !rootNavigationState?.key) return;
+    setHandoffToOnboarding(true);
+    router.replace('/onboarding' as any);
+    const id = setTimeout(() => {
+      setBootFlags((prev) => (prev ? { ...prev, needsOnboarding: false } : prev));
+      setHandoffToOnboarding(false);
+    }, 3000);
+    return () => clearTimeout(id);
+  }, [bootDone, bootFlags?.needsOnboarding, rootNavigationState?.key]);
 
   useEffect(() => {
     // Scheduled notifications + custom sounds don't work in Expo Go.
@@ -380,6 +388,9 @@ export default function RootLayout() {
   }, []);
 
   const fadeToHome = () => {
+    if (bootFlags?.needsOnboarding) {
+      setHandoffToOnboarding(true);
+    }
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 320,
@@ -388,18 +399,18 @@ export default function RootLayout() {
     }).start(() => setBootDone(true));
   };
 
-  const handleHadithYes = () => {
+  const handleHadithYes = async () => {
     setShowHadithPrompt(false);
-    markHadithPredownloadAsked().catch(() => undefined);
-    // Fire-and-forget: cache every book quietly in the background after we land
-    // on the home screen.
+    await markHadithPredownloadAsked().catch(() => undefined);
+    // Fire-and-forget: cache every book quietly in the background while the
+    // user continues through onboarding/the app.
     cacheAllBooksInBackground().catch(() => undefined);
     fadeToHome();
   };
 
-  const handleHadithNo = () => {
+  const handleHadithNo = async () => {
     setShowHadithPrompt(false);
-    markHadithPredownloadAsked().catch(() => undefined);
+    await markHadithPredownloadAsked().catch(() => undefined);
     fadeToHome();
   };
 
@@ -452,9 +463,13 @@ export default function RootLayout() {
     const { shouldRun, ask } = bootFlags;
 
     if (!shouldRun) {
+      if (ask) {
+        setNeedsBoot(true);
+        setShowHadithPrompt(true);
+        return;
+      }
       setNeedsBoot(false);
       setBootDone(true);
-      if (ask) setShowHadithPrompt(true);
       return;
     }
 
@@ -547,6 +562,7 @@ export default function RootLayout() {
   return (
     <View style={[styles.flex, { backgroundColor: themeColors.bg }]} onLayout={onLayoutRootView}>
     <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+    <CustomAlertProvider>
     <QueryClientProvider client={queryClient}>
       <Stack
         screenOptions={{
@@ -594,6 +610,14 @@ export default function RootLayout() {
       <AdhanAlarmModal />
       <AchievementUnlockModal />
     </QueryClientProvider>
+    </CustomAlertProvider>
+    {handoffToOnboarding ? (
+      <View style={styles.handoffScreen} pointerEvents="auto">
+        <AppLogo height={118} />
+        <GeometricDivider color={themeColors.gold} style={{ marginVertical: 14 }} />
+        <Text style={styles.bootTitle}>Preparing your journey...</Text>
+      </View>
+    ) : null}
     </View>
   );
 }
@@ -668,5 +692,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     letterSpacing: 0.2,
+  },
+  handoffScreen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.primaryDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    zIndex: 100,
   },
 });

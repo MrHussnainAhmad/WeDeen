@@ -30,6 +30,10 @@ object AppBlockerPrefs {
   private const val KEY_OVERLAY_SPINNER_COLOR = "overlay_spinner_color"
   private const val KEY_NOTIFICATION_TITLE = "notification_title"
   private const val KEY_NOTIFICATION_TEXT = "notification_text"
+  
+  // Base configuration for automatic Boot/Timezone recovery
+  const val KEY_BASE_BLOCKED_PACKAGES = "base_blocked_packages"
+  const val KEY_PRAYER_WINDOW_MINUTES = "prayer_window_minutes"
 
   fun get(context: Context): SharedPreferences =
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -41,6 +45,20 @@ object AppBlockerPrefs {
     val expanded = BlockedPackageAliases.expand(packages)
     get(context).edit()
       .putStringSet(KEY_BLOCKED_PACKAGES, expanded.toSet())
+      .apply()
+  }
+
+  fun getBaseBlockedPackages(context: Context): Set<String> =
+    get(context).getStringSet(KEY_BASE_BLOCKED_PACKAGES, emptySet()) ?: emptySet()
+
+  fun getPrayerWindowMinutes(context: Context): Int =
+    get(context).getInt(KEY_PRAYER_WINDOW_MINUTES, 30)
+
+  fun setPrayerLockConfig(context: Context, packages: Collection<String>, windowMinutes: Int) {
+    val expanded = BlockedPackageAliases.expand(packages)
+    get(context).edit()
+      .putStringSet(KEY_BASE_BLOCKED_PACKAGES, expanded.toSet())
+      .putInt(KEY_PRAYER_WINDOW_MINUTES, windowMinutes)
       .apply()
   }
 

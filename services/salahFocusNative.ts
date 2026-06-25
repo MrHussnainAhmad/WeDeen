@@ -25,6 +25,9 @@ type ExpoAppBlockerNative = {
   stopMonitoring(): void;
   temporaryUnlockAndroid(minutes: number): void;
   relockAndroid(): void;
+  schedulePrayerLock(startMs: number, endMs: number, packages: string[]): void;
+  cancelPrayerLock(): void;
+  setPrayerLockConfig(packages: string[], windowMinutes: number): void;
 };
 
 let native: ExpoAppBlockerNative | null | undefined;
@@ -46,11 +49,15 @@ export function isSalahFocusNativeSupported() {
 export async function getSalahFocusPermissionStatus() {
   const mod = getNative();
   if (!mod) return { allGranted: false, supported: false };
-  const [overlay, usageStats, notifications] = await Promise.all([
-    mod.checkOverlayPermission(),
-    mod.checkUsageStatsPermission(),
-    mod.checkNotificationPermission(),
-  ]);
+  let overlay = false;
+  try { overlay = await mod.checkOverlayPermission(); } catch {}
+
+  let usageStats = false;
+  try { usageStats = await mod.checkUsageStatsPermission(); } catch {}
+
+  let notifications = true; // Default true on older Androids
+  try { notifications = await mod.checkNotificationPermission(); } catch {}
+
   return {
     allGranted: overlay && usageStats && notifications,
     supported: true,
@@ -155,4 +162,30 @@ export function launchAndroidPackage(packageName: string) {
   Linking.openURL(
     `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${pkg};end`
   ).catch(() => undefined);
+}
+
+export function schedulePrayerLock(startMs: number, endMs: number, packageNames: string[]) {
+  try {
+    const expanded = expandBlockedPackages(packageNames);
+    getNative()?.schedulePrayerLock(startMs, endMs, expanded);
+  } catch {
+    // non-fatal
+  }
+}
+
+export function cancelPrayerLock() {
+  try {
+    getNative()?.cancelPrayerLock();
+  } catch {
+    // non-fatal
+  }
+}
+
+export function syncPrayerLockConfig(packageNames: string[], windowMinutes: number) {
+  try {
+    const expanded = expandBlockedPackages(packageNames);
+    getNative()?.setPrayerLockConfig(expanded, windowMinutes);
+  } catch {
+    // non-fatal
+  }
 }

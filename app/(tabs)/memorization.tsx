@@ -320,7 +320,7 @@ export default function MemorizationScreen() {
       contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top + 14, 22) }, responsive.centerContent]}
       showsVerticalScrollIndicator={false}
     >
-      <View ref={scrollContentRef} collapsable={false}>
+      <View ref={scrollContentRef} collapsable={false} style={{ gap: 16 }}>
       {/* ───── Hero ───── */}
       <TabFadeInView>
         <View style={styles.hero}>

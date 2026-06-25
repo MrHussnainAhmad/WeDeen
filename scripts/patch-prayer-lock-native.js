@@ -22,6 +22,7 @@ const kotlinFiles = [
   'BlockedPackageAliases.kt',
   'AppBlockerPrefs.kt',
   'FocusModeHelper.kt',
+  'PrayerLockAlarmReceiver.kt',
 ];
 
 const FOCUS_MODE_MARKER = 'AsyncFunction("enableFocusMode")';
@@ -50,6 +51,19 @@ const FOCUS_MODE_FUNCTIONS = `
 
     Function("disableFocusMode") {
       FocusModeHelper.disableFocus(context)
+    }
+
+    Function("schedulePrayerLock") { startMs: Double, endMs: Double, packages: List<String> ->
+      PrayerLockAlarmReceiver.scheduleLock(context, startMs.toLong(), packages)
+      PrayerLockAlarmReceiver.scheduleUnlock(context, endMs.toLong())
+    }
+
+    Function("cancelPrayerLock") {
+      PrayerLockAlarmReceiver.cancelAll(context)
+    }
+
+    Function("setPrayerLockConfig") { packages: List<String>, windowMinutes: Double ->
+      AppBlockerPrefs.setPrayerLockConfig(context, packages, windowMinutes.toInt())
     }
 `;
 

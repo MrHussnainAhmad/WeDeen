@@ -73,6 +73,11 @@ async function openStoreListing() {
   }
 }
 const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
+const DEVELOPER_STORE_URL = 'https://play.google.com/store/apps/developer?id=Appsbyhussnain';
+
+async function openDeveloperListing() {
+  Linking.openURL(DEVELOPER_STORE_URL).catch(() => undefined);
+}
 
 const CALCULATION_METHODS = [
   { id: 1, name: 'University of Islamic Sciences, Karachi' },
@@ -927,10 +932,17 @@ export default function SettingsScreen() {
             <Text style={styles.aboutLabel}>Version</Text>
             <Text style={styles.aboutValue}>{APP_VERSION}</Text>
           </View>
-          <View style={[styles.aboutRow, styles.aboutRowLast]}>
+          <PressableScale onPress={openDeveloperListing} style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>Developer</Text>
-            <Text style={styles.aboutValue}>Apps by Hussnain</Text>
-          </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.aboutValue}>Apps by Hussnain</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} style={{ marginLeft: 6 }} />
+            </View>
+          </PressableScale>
+          <PressableScale onPress={() => router.push('/privacy' as any)} style={[styles.aboutRow, styles.aboutRowLast]}>
+            <Text style={styles.aboutLabel}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </PressableScale>
           <PressableScale onPress={openStoreListing} style={styles.rateButton}>
             <Ionicons name="star" size={16} color={colors.goldDeep} style={{ marginRight: 8 }} />
             <Text style={styles.rateButtonText}>Rate on Play Store</Text>

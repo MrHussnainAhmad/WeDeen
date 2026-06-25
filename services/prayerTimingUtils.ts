@@ -169,6 +169,28 @@ export async function getOutstandingPrayerLock(
   return null;
 }
 
+/** The very next upcoming prayer window (used for background alarm scheduling). */
+export async function getNextPrayerWindow(
+  loc: PrayerLocation,
+  now: Date,
+  windowMinutes: number
+): Promise<PrayerWindow | null> {
+  const windows = await getPrayerWindowsForDay(loc, now, windowMinutes);
+  const ts = now.getTime();
+  for (const window of windows) {
+    if (window.start.getTime() > ts) {
+      return window;
+    }
+  }
+  
+  // If no more prayers today, return tomorrow's Fajr
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const tomorrowWindows = await getPrayerWindowsForDay(loc, tomorrow, windowMinutes);
+  return tomorrowWindows[0] || null;
+}
+
 export async function exportWidgetData(
   location: any,
   school: unknown,

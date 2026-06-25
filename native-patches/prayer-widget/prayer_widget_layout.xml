@@ -94,7 +94,7 @@
         <View
             android:layout_width="1dp"
             android:layout_height="match_parent"
-            android:background="rgba(255,255,255,0.15)"
+            android:background="#26ffffff"
             android:layout_marginStart="12dp"
             android:layout_marginEnd="12dp"/>
 

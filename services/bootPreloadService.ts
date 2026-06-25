@@ -1,4 +1,4 @@
-﻿import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Font from 'expo-font';
 import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getOrDownloadQuran, isQuranFileCached, type QuranDownloadProgress } from './quranService';
@@ -9,9 +9,6 @@ const BOOT_PRELOAD_DONE_KEY = 'boot_preload_done_v1';
 const HADITH_PROMPT_ASKED_KEY = 'hadith_predownload_asked_v1';
 const ALLAH_NAMES_CACHE_KEY = 'names_allah_cache_v1';
 const MUHAMMAD_NAMES_CACHE_KEY = 'names_muhammad_cache_v3';
-
-/** Max time to keep the user on the first-launch boot screen for Quran download. */
-const BOOT_QURAN_BUDGET_MS = 10_000;
 
 export type BootPreloadResult = 'completed_on_boot' | 'continued_in_background';
 
@@ -128,38 +125,15 @@ export async function markHadithPredownloadAsked() {
 }
 
 /**
- * First-launch boot preload. If Quran finishes within ~10s, stay on boot screen.
- * Otherwise send the user to Home and finish the download in the background.
+ * First-launch boot preload. The first-run flow intentionally waits for the
+ * Quran cache before moving on so the next steps happen in a predictable order:
+ * Quran download -> Hadith prompt -> onboarding -> Home.
  */
 export async function runBootPreloadOnce(
   onQuranProgress?: (p: QuranDownloadProgress) => void
 ): Promise<BootPreloadResult> {
-  let quranFinished = false;
-
-  const quranWork = retryQuranPreload(onQuranProgress)
-    .then(() => {
-      quranFinished = true;
-    })
-    .catch((error) => {
-      throw error;
-    });
-
-  await Promise.race([
-    quranWork.catch(() => undefined),
-    new Promise<void>((resolve) => setTimeout(resolve, BOOT_QURAN_BUDGET_MS)),
-  ]);
-
-  if (quranFinished) {
-    await finishOptionalBootAssets();
-    await markBootFlowComplete();
-    return 'completed_on_boot';
-  }
-
+  await retryQuranPreload(onQuranProgress);
+  await finishOptionalBootAssets();
   await markBootFlowComplete();
-
-  quranWork
-    .then(async () => finishOptionalBootAssets())
-    .catch(() => continueBootPreloadInBackground());
-
-  return 'continued_in_background';
+  return 'completed_on_boot';
 }

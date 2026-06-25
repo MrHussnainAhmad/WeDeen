@@ -10,49 +10,76 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center"
-        android:layout_centerInParent="true">
+        android:gravity="top|center_horizontal">
 
         <TextView
-            android:id="@+id/next_prayer_name_small"
+            android:id="@+id/current_prayer_text_small"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Next: Maghrib"
+            android:text="Asr"
             android:textColor="#E8F0EB"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginTop="2dp" />
 
-        <TextView
-            android:id="@+id/countdown_text_small"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="in 1h 23m"
-            android:textColor="#D4AD3A"
-            android:textSize="13sp"
-            android:layout_marginTop="4dp" />
-
-        <ProgressBar
-            android:id="@+id/prayer_progress_small"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="3dp"
-            android:layout_marginTop="4dp"
-            android:max="1000"
-            android:progress="0"
-            android:progressTint="#D4AD3A" />
-            
         <TextView
             android:id="@+id/mark_prayed_button_small"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Mark"
+            android:text="Mark Prayed"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"
+            android:textSize="10sp"
             android:textStyle="bold"
             android:background="#26FFFFFF"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="2dp"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="3dp"
             android:layout_marginTop="4dp" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="#1AFFFFFF"
+            android:padding="8dp"
+            android:layout_marginTop="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/next_prayer_name_small"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Next: Maghrib"
+                    android:textColor="#E8F0EB"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/countdown_text_small"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="- 1h 23m"
+                    android:textColor="#D4AD3A"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/next_prayer_time_small"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="18:45"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
 </RelativeLayout>

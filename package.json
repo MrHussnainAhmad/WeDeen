@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "postinstall": "node scripts/patch-prayer-lock-native.js",
     "validate:android": "node scripts/validate-android-build.js",
-    "eas-build-post-install": "node scripts/patch-prayer-lock-native.js"
+    "eas-build-post-install": "node scripts/patch-prayer-lock-native.js",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

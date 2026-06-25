@@ -101,6 +101,84 @@ type TimingsPayload = {
   isha: string;
 };
 
+function getTodayApiDate(d = new Date()) {
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
+
+async function getHomeTimingCacheKey(location: SavedLocation) {
+  const prefs = await getUiPreferences().catch(() => ({ madhab: 'hanafi', calculationMethodId: 2 }));
+  const { school, schoolParam, methodId } = getPrayerTimingApiParams(
+    prefs.madhab,
+    prefs.calculationMethodId
+  );
+  return {
+    cacheKey: `${TIMINGS_CACHE_PREFIX}${todayKey()}_${school}_${schoolParam}_${methodId}_${getLocationCacheKey(location)}`,
+    legacyCacheKey: `${TIMINGS_CACHE_PREFIX}${todayKey()}_${getLocationCacheKey(location)}`,
+    school,
+    schoolParam,
+    methodId,
+  };
+}
+
+function normalizeTimingPayload(value: any): TimingsPayload {
+  return {
+    fajr: normalizeTime(value?.fajr ?? value?.Fajr),
+    sunrise: normalizeTime(value?.sunrise ?? value?.Sunrise),
+    dhuhr: normalizeTime(value?.dhuhr ?? value?.Dhuhr),
+    asr: normalizeTime(value?.asr ?? value?.Asr),
+    maghrib: normalizeTime(value?.maghrib ?? value?.Maghrib),
+    isha: normalizeTime(value?.isha ?? value?.Isha),
+  };
+}
+
+async function readCachedTimingPayload(location: SavedLocation) {
+  const { cacheKey, legacyCacheKey } = await getHomeTimingCacheKey(location);
+  const cached = await AsyncStorage.getItem(cacheKey);
+  const legacyCached = cached ? null : await AsyncStorage.getItem(legacyCacheKey);
+  const raw = cached ?? legacyCached;
+  if (!raw) return null;
+  try {
+    return normalizeTimingPayload(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export async function preloadHomePrayerTimings(location: SavedLocation): Promise<TimingsPayload | null> {
+  const cached = await readCachedTimingPayload(location);
+  if (cached && cached.fajr && cached.dhuhr) return cached;
+
+  const { cacheKey, legacyCacheKey, school, schoolParam, methodId } = await getHomeTimingCacheKey(location);
+  const date = getTodayApiDate();
+  const url =
+    location.mode === 'coords' && location.latitude != null && location.longitude != null
+      ? `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=${methodId}&school=${schoolParam}`
+      : `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=${methodId}&school=${schoolParam}`;
+
+  const res = await fetch(url);
+  const json = await res.json();
+  const parsed = normalizeTimingPayload(json?.data?.timings || {});
+
+  await Promise.all([
+    AsyncStorage.setItem(cacheKey, JSON.stringify(parsed)),
+    AsyncStorage.setItem(legacyCacheKey, JSON.stringify(parsed)),
+  ]);
+
+  const todayStr = getTodayApiDate();
+  const newTimingsMap = {
+    [todayStr]: {
+      Fajr: parsed.fajr,
+      Sunrise: parsed.sunrise,
+      Dhuhr: parsed.dhuhr,
+      Asr: parsed.asr,
+      Maghrib: parsed.maghrib,
+      Isha: parsed.isha,
+    },
+  };
+  exportWidgetData(location, school, methodId, newTimingsMap).catch(() => undefined);
+  return parsed;
+}
+
 /**
  * Resolves the user's saved location (without prompting). The Home widget stays
  * passive — it shows a gentle "enable" prompt instead of demanding permission,
@@ -147,6 +225,7 @@ export function usePrayerSnapshot(nowTick: number) {
         locked: false,
       };
       await saveLocation(loc);
+      await preloadHomePrayerTimings(loc).catch(() => undefined);
       setLocation(loc);
       setPermissionDenied(false);
       // Arm the adhan alarms immediately so users who enable location from Home
@@ -171,82 +250,18 @@ export function usePrayerSnapshot(nowTick: number) {
     staleTime: 30 * 60 * 1000,
     queryFn: async (): Promise<TimingsPayload | null> => {
       if (!location) return null;
-      const date = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
-      const prefs = await getUiPreferences().catch(() => ({ madhab: 'hanafi', calculationMethodId: 2 }));
-      const { school, schoolParam, methodId } = getPrayerTimingApiParams(
-        prefs.madhab,
-        prefs.calculationMethodId
-      );
-      const cacheKey = `${TIMINGS_CACHE_PREFIX}${todayKey()}_${school}_${schoolParam}_${methodId}_${getLocationCacheKey(location)}`;
+      const cached = await readCachedTimingPayload(location);
+      if (cached && cached.fajr && cached.dhuhr) return cached;
       
       // Update local salah tracker state
       updateSalahLogsState(location).catch(() => undefined);
 
-      const url =
-        location.mode === 'coords' && location.latitude != null && location.longitude != null
-          ? `https://api.aladhan.com/v1/timings/${date}?latitude=${location.latitude}&longitude=${location.longitude}&method=${methodId}&school=${schoolParam}`
-          : `https://api.aladhan.com/v1/timingsByCity/${date}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=${methodId}&school=${schoolParam}`;
-
       try {
-        const res = await fetch(url);
-        const json = await res.json();
-        const t = json?.data?.timings || {};
-        const parsed = {
-          fajr: normalizeTime(t.Fajr),
-          sunrise: normalizeTime(t.Sunrise),
-          dhuhr: normalizeTime(t.Dhuhr),
-          asr: normalizeTime(t.Asr),
-          maghrib: normalizeTime(t.Maghrib),
-          isha: normalizeTime(t.Isha),
-        };
-
-        const todayStr = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
-        const newTimingsMap = {
-          [todayStr]: {
-            Fajr: parsed.fajr,
-            Sunrise: parsed.sunrise,
-            Dhuhr: parsed.dhuhr,
-            Asr: parsed.asr,
-            Maghrib: parsed.maghrib,
-            Isha: parsed.isha,
-          }
-        };
-        exportWidgetData(location, school, methodId, newTimingsMap).catch(() => undefined);
-
-        return parsed;
+        return await preloadHomePrayerTimings(location);
       } catch {
         // Fall back to whatever the Timings tab last cached for today.
-        const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            const resolved = {
-              fajr: parsed.fajr ?? '--:--',
-              sunrise: parsed.sunrise ?? '--:--',
-              dhuhr: parsed.dhuhr ?? '--:--',
-              asr: parsed.asr ?? '--:--',
-              maghrib: parsed.maghrib ?? '--:--',
-              isha: parsed.isha ?? '--:--',
-            };
-
-            const todayStr = `${pad(new Date().getDate())}-${pad(new Date().getMonth() + 1)}-${new Date().getFullYear()}`;
-            const newTimingsMap = {
-              [todayStr]: {
-                Fajr: resolved.fajr,
-                Sunrise: resolved.sunrise,
-                Dhuhr: resolved.dhuhr,
-                Asr: resolved.asr,
-                Maghrib: resolved.maghrib,
-                Isha: resolved.isha,
-              }
-            };
-            exportWidgetData(location, school, methodId, newTimingsMap).catch(() => undefined);
-
-            return resolved;
-          } catch {
-            // ignore corrupt cache
-          }
-        }
+        const fallback = await readCachedTimingPayload(location);
+        if (fallback) return fallback;
         throw new Error('Unable to load prayer timings.');
       }
     },

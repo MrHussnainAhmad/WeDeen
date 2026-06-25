@@ -73,12 +73,12 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   backgroundLocationEnabled: false,
   colorScheme: 'light',
   nightBrightnessEnabled: true,
-  showTajweedColors: false,
+  showTajweedColors: true,
   showTafsirOption: false,
   quranPlaybackRate: 1,
   quranRepeatCount: 1,
   madhab: 'hanafi',
-  calculationMethodId: 2,
+  calculationMethodId: 1,
 };
 
 export async function getUiPreferences(): Promise<UiPreferences> {

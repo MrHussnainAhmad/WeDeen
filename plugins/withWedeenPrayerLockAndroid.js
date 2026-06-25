@@ -77,6 +77,29 @@ function withWedeenPrayerLockAndroid(config) {
       },
     ];
 
+    if (!app.receiver) app.receiver = [];
+    const RECEIVER = 'expo.modules.appblocker.PrayerLockAlarmReceiver';
+    let receiver = app.receiver.find((entry) => entry.$?.['android:name'] === RECEIVER);
+    if (!receiver) {
+      receiver = {
+        $: {
+          'android:name': RECEIVER,
+          'android:exported': 'false',
+        },
+        'intent-filter': [
+          {
+            action: [
+              { $: { 'android:name': 'expo.modules.appblocker.ACTION_LOCK' } },
+              { $: { 'android:name': 'expo.modules.appblocker.ACTION_UNLOCK' } },
+              { $: { 'android:name': 'android.intent.action.BOOT_COMPLETED' } },
+              { $: { 'android:name': 'android.intent.action.TIMEZONE_CHANGED' } },
+            ],
+          },
+        ],
+      };
+      app.receiver.push(receiver);
+    }
+
     return config;
   });
 

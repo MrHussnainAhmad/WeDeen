@@ -42,8 +42,6 @@ export default function ProfileScreen() {
     },
     onSuccess: async (data) => {
       await setAuth(data.token, data.user);
-      const profile = await me(data.token);
-      await setAuth(data.token, profile.user);
       setPassword('');
       setConfirmPassword('');
       Alert.alert(

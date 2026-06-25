@@ -188,7 +188,7 @@ export default function PlacesScreen() {
             </Text>
             <PressableScale
               style={[styles.primaryButton, { width: '100%' }]}
-              onPress={() => router.push('/settings')}
+              onPress={() => router.push('/profile')}
             >
               <Text style={styles.primaryButtonText}>Sign In / Create Account</Text>
             </PressableScale>
@@ -246,7 +246,7 @@ function PlaceCard({ place, favorite, onFavorite, isTablet = false }: { place: W
         <View style={{ flex: 1 }}>
           <Text style={styles.placeName}>{place.name}</Text>
           <Text style={styles.placeMeta}>
-            {place.distanceKm.toFixed(1)} km · {place.type.replace('_', ' ')}
+            {(place.distanceKm || 0).toFixed(1)} km · {place.type.replace('_', ' ')}
           </Text>
         </View>
         <PressableScale onPress={onFavorite} style={styles.favoriteButton}>
@@ -306,7 +306,7 @@ function MapPreview({
     });
 
     const maxDist = Math.max(...mapped.map((m) => m.dist), 0.0001);
-    const maxRealDistKm = Math.max(...validPlaces.map((p) => p.distanceKm), 1);
+    const maxRealDistKm = Math.max(...validPlaces.map((p) => p.distanceKm || 0), 1);
 
     return { mapped, maxDist, maxRealDistKm };
   }, [places]);
@@ -410,7 +410,7 @@ function MapPreview({
                   {selectedPlace.name}
                 </Text>
                 <Text style={styles.selectedPlaceMeta}>
-                  {selectedPlace.distanceKm.toFixed(1)} km · {selectedPlace.type.replace('_', ' ')}
+                  {(selectedPlace.distanceKm || 0).toFixed(1)} km · {selectedPlace.type.replace('_', ' ')}
                 </Text>
               </View>
               <PressableScale

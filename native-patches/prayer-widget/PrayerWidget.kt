@@ -166,14 +166,16 @@ class PrayerWidget : AppWidgetProvider() {
             )
 
             if (isSmall) {
+                views.setOnClickPendingIntent(R.id.current_prayer_text_small, pendingIntent)
                 views.setOnClickPendingIntent(R.id.next_prayer_name_small, pendingIntent)
             } else {
-                views.setOnClickPendingIntent(R.id.current_prayer_text, pendingIntent)
+                if (!isLarge) {
+                    views.setOnClickPendingIntent(R.id.current_prayer_text, pendingIntent)
+                    views.setOnClickPendingIntent(R.id.next_prayer_name, pendingIntent)
+                }
                 views.setOnClickPendingIntent(R.id.widget_clock, pendingIntent)
                 if (isLarge) {
                     views.setOnClickPendingIntent(R.id.mark_prayed_button_large, pendingIntent)
-                } else {
-                    views.setOnClickPendingIntent(R.id.next_prayer_name, pendingIntent)
                 }
             }
 
@@ -195,10 +197,20 @@ class PrayerWidget : AppWidgetProvider() {
 
             if (widgetData == null) {
                 if (isSmall) {
+                    views.setTextViewText(R.id.current_prayer_text_small, "WeDeen")
+                    views.setTextColor(R.id.current_prayer_text_small, primaryTextColor)
                     views.setTextViewText(R.id.next_prayer_name_small, "Open WeDeen")
                     views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
                     views.setTextViewText(R.id.countdown_text_small, "to update location")
                     views.setTextColor(R.id.countdown_text_small, mutedTextColor)
+                    views.setTextViewText(R.id.next_prayer_time_small, "--:--")
+                    views.setTextColor(R.id.next_prayer_time_small, primaryTextColor)
+                } else if (isLarge) {
+                    views.setTextViewText(R.id.location_text, "Open WeDeen to update location")
+                    views.setTextColor(R.id.location_text, mutedTextColor)
+                    views.setTextViewText(R.id.metadata_text, "Method unavailable")
+                    views.setTextColor(R.id.metadata_text, mutedTextColor)
+                    views.setTextColor(R.id.widget_clock, primaryTextColor)
                 } else {
                     views.setTextViewText(R.id.current_prayer_text, "No Data")
                     views.setTextColor(R.id.current_prayer_text, primaryTextColor)
@@ -210,9 +222,7 @@ class PrayerWidget : AppWidgetProvider() {
                     views.setTextColor(R.id.countdown_text, goldColor)
                     views.setTextViewText(R.id.metadata_text, "Method unavailable")
                     views.setTextColor(R.id.metadata_text, mutedTextColor)
-                    if (layoutId == R.layout.prayer_widget_layout) {
-                        views.setTextColor(R.id.widget_clock, primaryTextColor)
-                    }
+                    views.setTextColor(R.id.widget_clock, primaryTextColor)
                 }
                 appWidgetManager.updateAppWidget(widgetId, views)
                 return
@@ -235,10 +245,20 @@ class PrayerWidget : AppWidgetProvider() {
 
                 if (todayTimings == null) {
                     if (isSmall) {
+                        views.setTextViewText(R.id.current_prayer_text_small, "WeDeen")
+                        views.setTextColor(R.id.current_prayer_text_small, primaryTextColor)
                         views.setTextViewText(R.id.next_prayer_name_small, "Open WeDeen")
                         views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
                         views.setTextViewText(R.id.countdown_text_small, "to sync calendar")
                         views.setTextColor(R.id.countdown_text_small, mutedTextColor)
+                        views.setTextViewText(R.id.next_prayer_time_small, "--:--")
+                        views.setTextColor(R.id.next_prayer_time_small, primaryTextColor)
+                    } else if (isLarge) {
+                        views.setTextViewText(R.id.location_text, locationName)
+                        views.setTextColor(R.id.location_text, mutedTextColor)
+                        views.setTextViewText(R.id.metadata_text, "$methodName - $school")
+                        views.setTextColor(R.id.metadata_text, mutedTextColor)
+                        views.setTextColor(R.id.widget_clock, primaryTextColor)
                     } else {
                         views.setTextViewText(R.id.current_prayer_text, "Open WeDeen")
                         views.setTextColor(R.id.current_prayer_text, primaryTextColor)
@@ -250,9 +270,7 @@ class PrayerWidget : AppWidgetProvider() {
                         views.setTextColor(R.id.countdown_text, goldColor)
                         views.setTextViewText(R.id.metadata_text, "$methodName - $school")
                         views.setTextColor(R.id.metadata_text, mutedTextColor)
-                        if (layoutId == R.layout.prayer_widget_layout) {
-                            views.setTextColor(R.id.widget_clock, primaryTextColor)
-                        }
+                        views.setTextColor(R.id.widget_clock, primaryTextColor)
                     }
                     appWidgetManager.updateAppWidget(widgetId, views)
                     return
@@ -341,32 +359,32 @@ class PrayerWidget : AppWidgetProvider() {
 
                 val buttonBgPrayed = if (isDark) R.drawable.widget_button_bg_prayed_dark else R.drawable.widget_button_bg_prayed_light
                 if (isMarkedPrayed) {
-                    views.setTextViewText(R.id.mark_prayed_button, "✓ Prayed")
-                    views.setTextColor(R.id.mark_prayed_button, if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0B6B4F"))
-                    views.setTextViewText(R.id.mark_prayed_button_small, "✓ Done")
-                    views.setTextColor(R.id.mark_prayed_button_small, if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0B6B4F"))
-                    if (isLarge) {
+                    if (isSmall) {
+                        views.setTextViewText(R.id.mark_prayed_button_small, "✓ Done")
+                        views.setTextColor(R.id.mark_prayed_button_small, if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0B6B4F"))
+                        views.setInt(R.id.mark_prayed_button_small, "setBackgroundResource", buttonBgPrayed)
+                    } else if (isLarge) {
                         views.setTextViewText(R.id.mark_prayed_button_large, "✓ Prayed")
                         views.setTextColor(R.id.mark_prayed_button_large, if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0B6B4F"))
-                    }
-                    views.setInt(R.id.mark_prayed_button, "setBackgroundResource", buttonBgPrayed)
-                    views.setInt(R.id.mark_prayed_button_small, "setBackgroundResource", buttonBgPrayed)
-                    if (isLarge) {
                         views.setInt(R.id.mark_prayed_button_large, "setBackgroundResource", buttonBgPrayed)
+                    } else {
+                        views.setTextViewText(R.id.mark_prayed_button, "✓ Prayed")
+                        views.setTextColor(R.id.mark_prayed_button, if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0B6B4F"))
+                        views.setInt(R.id.mark_prayed_button, "setBackgroundResource", buttonBgPrayed)
                     }
                 } else {
-                    views.setTextViewText(R.id.mark_prayed_button, "Mark Prayed")
-                    views.setTextColor(R.id.mark_prayed_button, unmarkedTextColor)
-                    views.setTextViewText(R.id.mark_prayed_button_small, "Mark")
-                    views.setTextColor(R.id.mark_prayed_button_small, unmarkedTextColor)
-                    if (isLarge) {
+                    if (isSmall) {
+                        views.setTextViewText(R.id.mark_prayed_button_small, "Mark Prayed")
+                        views.setTextColor(R.id.mark_prayed_button_small, unmarkedTextColor)
+                        views.setInt(R.id.mark_prayed_button_small, "setBackgroundResource", buttonBg)
+                    } else if (isLarge) {
                         views.setTextViewText(R.id.mark_prayed_button_large, "Mark Prayed")
                         views.setTextColor(R.id.mark_prayed_button_large, unmarkedTextColor)
-                    }
-                    views.setInt(R.id.mark_prayed_button, "setBackgroundResource", buttonBg)
-                    views.setInt(R.id.mark_prayed_button_small, "setBackgroundResource", buttonBg)
-                    if (isLarge) {
                         views.setInt(R.id.mark_prayed_button_large, "setBackgroundResource", buttonBg)
+                    } else {
+                        views.setTextViewText(R.id.mark_prayed_button, "Mark Prayed")
+                        views.setTextColor(R.id.mark_prayed_button, unmarkedTextColor)
+                        views.setInt(R.id.mark_prayed_button, "setBackgroundResource", buttonBg)
                     }
                 }
 
@@ -379,10 +397,13 @@ class PrayerWidget : AppWidgetProvider() {
                     context, 0, markPrayedIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                views.setOnClickPendingIntent(R.id.mark_prayed_button, markPrayedPendingIntent)
-                views.setOnClickPendingIntent(R.id.mark_prayed_button_small, markPrayedPendingIntent)
-                if (isLarge) {
+                
+                if (isSmall) {
+                    views.setOnClickPendingIntent(R.id.mark_prayed_button_small, markPrayedPendingIntent)
+                } else if (isLarge) {
                     views.setOnClickPendingIntent(R.id.mark_prayed_button_large, markPrayedPendingIntent)
+                } else {
+                    views.setOnClickPendingIntent(R.id.mark_prayed_button, markPrayedPendingIntent)
                 }
 
                 if (nextPrayer != null) {
@@ -405,14 +426,17 @@ class PrayerWidget : AppWidgetProvider() {
                             progressValue = ((elapsedMs.toFloat() / totalDurationMs.toFloat()) * 1000).toInt()
                         }
                     }
-                    views.setProgressBar(R.id.prayer_progress, 1000, progressValue, false)
-                    views.setProgressBar(R.id.prayer_progress_small, 1000, progressValue, false)
+                    val formattedTime = timeFormat.format(nextPrayer.time).substring(11, 16)
 
                     if (isSmall) {
+                        views.setTextViewText(R.id.current_prayer_text_small, currentPrayerName)
+                        views.setTextColor(R.id.current_prayer_text_small, goldColor)
                         views.setTextViewText(R.id.next_prayer_name_small, "Next: ${nextPrayer.name}")
-                        views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
+                        views.setTextColor(R.id.next_prayer_name_small, secondaryTextColor)
                         views.setTextViewText(R.id.countdown_text_small, countdownStr)
-                        views.setTextColor(R.id.countdown_text_small, goldColor)
+                        views.setTextColor(R.id.countdown_text_small, mutedTextColor)
+                        views.setTextViewText(R.id.next_prayer_time_small, formattedTime)
+                        views.setTextColor(R.id.next_prayer_time_small, primaryTextColor)
                     } else if (isLarge) {
                         views.setTextViewText(R.id.location_text, locationName)
                         views.setTextColor(R.id.location_text, mutedTextColor)
@@ -490,10 +514,18 @@ class PrayerWidget : AppWidgetProvider() {
                     }
                 } else {
                     if (isSmall) {
+                        views.setTextViewText(R.id.current_prayer_text_small, "Isha")
+                        views.setTextColor(R.id.current_prayer_text_small, goldColor)
                         views.setTextViewText(R.id.next_prayer_name_small, "Next: Fajr")
-                        views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
+                        views.setTextColor(R.id.next_prayer_name_small, secondaryTextColor)
                         views.setTextViewText(R.id.countdown_text_small, "Tomorrow")
-                        views.setTextColor(R.id.countdown_text_small, goldColor)
+                        views.setTextColor(R.id.countdown_text_small, mutedTextColor)
+                        if (tomorrowFajrDate != null) {
+                            views.setTextViewText(R.id.next_prayer_time_small, timeFormat.format(tomorrowFajrDate).substring(11, 16))
+                        } else {
+                            views.setTextViewText(R.id.next_prayer_time_small, "--:--")
+                        }
+                        views.setTextColor(R.id.next_prayer_time_small, primaryTextColor)
                     } else if (isLarge) {
                         views.setTextViewText(R.id.location_text, locationName)
                         views.setTextColor(R.id.location_text, mutedTextColor)
@@ -574,10 +606,18 @@ class PrayerWidget : AppWidgetProvider() {
             } catch (e: Exception) {
                 Log.e("PrayerWidget", "Error rendering widget", e)
                 if (isSmall) {
+                    views.setTextViewText(R.id.current_prayer_text_small, "Error")
+                    views.setTextColor(R.id.current_prayer_text_small, primaryTextColor)
                     views.setTextViewText(R.id.next_prayer_name_small, "Open WeDeen")
                     views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
                     views.setTextViewText(R.id.countdown_text_small, "to reload")
                     views.setTextColor(R.id.countdown_text_small, mutedTextColor)
+                    views.setTextViewText(R.id.next_prayer_time_small, "--:--")
+                    views.setTextColor(R.id.next_prayer_time_small, primaryTextColor)
+                } else if (isLarge) {
+                    views.setTextViewText(R.id.location_text, "Render failed")
+                    views.setTextColor(R.id.location_text, mutedTextColor)
+                    views.setTextColor(R.id.widget_clock, primaryTextColor)
                 } else {
                     views.setTextViewText(R.id.current_prayer_text, "Error")
                     views.setTextColor(R.id.current_prayer_text, primaryTextColor)
@@ -587,13 +627,15 @@ class PrayerWidget : AppWidgetProvider() {
                     views.setTextColor(R.id.next_prayer_name, primaryTextColor)
                     views.setTextViewText(R.id.countdown_text, "")
                     views.setTextViewText(R.id.metadata_text, "")
-                    if (layoutId == R.layout.prayer_widget_layout) {
-                        views.setTextColor(R.id.widget_clock, primaryTextColor)
-                    }
+                    views.setTextColor(R.id.widget_clock, primaryTextColor)
                 }
             }
 
-            appWidgetManager.updateAppWidget(widgetId, views)
+            try {
+                appWidgetManager.updateAppWidget(widgetId, views)
+            } catch (e: Exception) {
+                Log.e("PrayerWidget", "Fatal error updating app widget", e)
+            }
         }
     }
 }

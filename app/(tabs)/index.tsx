@@ -141,7 +141,7 @@ export default function HomeScreen() {
       scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
-          refreshing={isFetching || prayer.isFetching}
+          refreshing={prayer.isFetching}
           onRefresh={onRefresh}
           colors={[themeColors.primary]}
           tintColor={themeColors.primary}

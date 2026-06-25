@@ -22,7 +22,7 @@
       },
       "package": "com.hussnainahmadsahi.wedeen",
       "versionCode": 4,
-      "backgroundColor": "#F6F1E7",
+      "backgroundColor": "#F8F5EF",
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -43,7 +43,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/logo-splash.png",
-          "imageWidth": 280,
+          "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#F8F5EF"
         }

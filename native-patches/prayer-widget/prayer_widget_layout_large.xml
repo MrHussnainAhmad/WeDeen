@@ -134,7 +134,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="rgba(255,255,255,0.08)" />
+            android:background="#14ffffff" />
 
         <!-- Dhuhr Row -->
         <LinearLayout
@@ -176,7 +176,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="rgba(255,255,255,0.08)" />
+            android:background="#14ffffff" />
 
         <!-- Asr Row -->
         <LinearLayout
@@ -218,7 +218,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="rgba(255,255,255,0.08)" />
+            android:background="#14ffffff" />
 
         <!-- Maghrib Row -->
         <LinearLayout
@@ -260,7 +260,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="rgba(255,255,255,0.08)" />
+            android:background="#14ffffff" />
 
         <!-- Isha Row -->
         <LinearLayout

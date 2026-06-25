@@ -527,9 +527,15 @@ export default function TimingsScreen() {
   const [convResult, setConvResult] = useState<string | null>(null);
   const [convLoading, setConvLoading] = useState(false);
 
+  const currentHijriDayStr = todayHijriQuery.data?.hijri?.day ?? timingsQuery.data?.hijriDay;
+  const currentHijriDay = currentHijriDayStr ? Number(currentHijriDayStr) : 1;
+
   const monthlyEvents = useMemo(() => {
-    return getIslamicEventsForMonth(calendarMonth);
-  }, [calendarMonth]);
+    const all = getIslamicEventsForMonth(calendarMonth);
+    const upcoming = all.filter((e) => e.hijriDay >= currentHijriDay);
+    const hasToday = upcoming.length > 0 && upcoming[0].hijriDay === currentHijriDay;
+    return upcoming.slice(0, hasToday ? 2 : 1);
+  }, [calendarMonth, currentHijriDay]);
 
   const getGregorianDateForEvent = (event: IslamicEvent) => {
     const matchedRow = calendarRows.find((r: any) => Number(r?.hijri?.day) === event.hijriDay);

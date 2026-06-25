@@ -20,7 +20,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Ghusl Guide',
     titleUr: 'طریقہ غسل',
     icon: 'water-outline',
-    coverImage: require('@/assets/images/guide/ghusl.png'),
+    coverImage: require('@/assets/images/guide/ghusl.jpg'),
     steps: [
       {
         titleEn: 'Intention (Niyyah)',
@@ -65,7 +65,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Wudu Guide',
     titleUr: 'طریقہ وضو',
     icon: 'hand-left-outline',
-    coverImage: require('@/assets/images/guide/wudu.png'),
+    coverImage: require('@/assets/images/guide/wudu.jpg'),
     steps: [
       {
         titleEn: 'Intention and Bismillah',
@@ -122,7 +122,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Prayer (Salah)',
     titleUr: 'طریقہ نماز',
     icon: 'body-outline',
-    coverImage: require('@/assets/images/guide/prayer.png'),
+    coverImage: require('@/assets/images/guide/prayer.jpg'),
     steps: [
       {
         titleEn: 'Takbeer & Intention',
@@ -173,7 +173,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Janazah Prayer',
     titleUr: 'صلاة الجنازة',
     icon: 'people-outline',
-    coverImage: require('@/assets/images/guide/janazah.png'),
+    coverImage: require('@/assets/images/guide/janazah.jpg'),
     steps: [
       {
         titleEn: 'Intention',
@@ -212,7 +212,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Umrah Guide',
     titleUr: 'طریقہ عمرہ',
     icon: 'compass-outline',
-    coverImage: require('@/assets/images/guide/umrah.png'),
+    coverImage: require('@/assets/images/guide/umrah.jpg'),
     steps: [
       {
         titleEn: 'Ihram',
@@ -257,7 +257,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Hajj Guide',
     titleUr: 'طریقہ حج',
     icon: 'earth',
-    coverImage: require('@/assets/images/guide/hajj.png'),
+    coverImage: require('@/assets/images/guide/hajj.jpg'),
     steps: [
       {
         titleEn: 'Day 1: 8th Dhul-Hijjah (Mina)',
@@ -302,7 +302,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Tayammum Guide',
     titleUr: 'طریقہ تیمم',
     icon: 'water-outline',
-    coverImage: require('@/assets/images/guide/tayammum.png'),
+    coverImage: require('@/assets/images/guide/tayammum.jpg'),
     steps: [
       {
         titleEn: 'Intention (Niyyah)',
@@ -341,7 +341,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Eid Prayer',
     titleUr: 'طریقہ نماز عید',
     icon: 'moon-outline',
-    coverImage: require('@/assets/images/guide/eid.png'),
+    coverImage: require('@/assets/images/guide/eid.jpg'),
     steps: [
       {
         titleEn: 'Intention',
@@ -386,7 +386,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Istikhara Prayer',
     titleUr: 'طریقہ استخارہ',
     icon: 'star-outline',
-    coverImage: require('@/assets/images/guide/istikhara.png'),
+    coverImage: require('@/assets/images/guide/istikhara.jpg'),
     steps: [
       {
         titleEn: 'Perform Wudu',
@@ -425,7 +425,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Sajdah Tilawat',
     titleUr: 'سجدہ تلاوت',
     icon: 'book-outline',
-    coverImage: require('@/assets/images/guide/sajda.png'),
+    coverImage: require('@/assets/images/guide/sajda.jpg'),
     steps: [
       {
         titleEn: 'Requirements',
@@ -464,7 +464,7 @@ export const GUIDES: GuideInfo[] = [
     titleEn: 'Fasting (Sawm)',
     titleUr: 'طریقہ صوم',
     icon: 'nutrition-outline',
-    coverImage: require('@/assets/images/guide/fasting.png'),
+    coverImage: require('@/assets/images/guide/fasting.jpg'),
     steps: [
       {
         titleEn: 'Intention',

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { markPrayerAsPrayed, getTodayStr } from './prayerTrackerService';
 import {
   getActivePrayerWindow,
+  getNextPrayerWindow,
   gregorianKey,
   isPrayerLocationConfigured,
   type PrayerLabel,
@@ -18,6 +19,9 @@ import {
   relockSalahFocusApps,
   startAndroidMonitoring,
   stopAndroidMonitoring,
+  schedulePrayerLock,
+  cancelPrayerLock,
+  syncPrayerLockConfig,
 } from './salahFocusNative';
 
 const CONFIG_KEY = 'salah_focus_config_v1';
@@ -351,6 +355,22 @@ export async function evaluateSalahFocus(now = new Date()): Promise<SalahFocusRu
     now,
     config.windowMinutes
   );
+  
+  // Also schedule the NEXT upcoming window regardless of whether we are in one right now.
+  const nextWindow = await getNextPrayerWindow(location, now, config.windowMinutes);
+  
+  syncPrayerLockConfig(config.androidBlockedPackages, config.windowMinutes);
+  
+  if (nextWindow && config.androidBlockedPackages.length > 0) {
+    schedulePrayerLock(
+      nextWindow.start.getTime(),
+      nextWindow.end.getTime(),
+      config.androidBlockedPackages
+    );
+  } else {
+    cancelPrayerLock();
+  }
+
   if (!outstanding) {
     await deactivateBlocking();
     return base;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,8 +8,6 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useResponsive } from '@/theme/responsive';
 import { useThemeColors } from '@/theme/useThemeColors';
 import { useAuthStore } from '@/store/authStore';
-import { getSalahLogs, calculateStreakStats } from '@/services/prayerTrackerService';
-import { getCachedLearningProgress } from '@/services/memorizationService';
 import { getSalahFocusConfig, isSalahFocusSupported } from '@/services/salahFocusService';
 
 const ALL_TOOLS = [
@@ -26,6 +24,14 @@ const ALL_TOOLS = [
   { href: '/guide', title: 'Guide', arabic: 'الدليل', subtitle: 'How to use WeDeen', icon: 'book-information-variant' as const, color: '#4A6572', tint: '#EBEFF1', tintBorder: '#CAD4DA' },
 ];
 
+function chunkTools<T>(items: T[], columns: number) {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += columns) {
+    rows.push(items.slice(i, i + columns));
+  }
+  return rows;
+}
+
 export default function HubScreen() {
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
@@ -33,88 +39,83 @@ export default function HubScreen() {
   const { user } = useAuthStore();
   const { type } = useLocalSearchParams<{ type?: string }>();
 
-  const [streak, setStreak] = useState(0);
-  const [memorizationSurah, setMemorizationSurah] = useState(1);
   const [focusConfigured, setFocusConfigured] = useState(true);
   const [focusSupported, setFocusSupported] = useState(false);
-
   const [suggestedTools, setSuggestedTools] = useState<typeof ALL_TOOLS>([]);
 
   useEffect(() => {
     const hour = new Date().getHours();
-    let dynamicSuggestions = [];
+    const dynamicSuggestions = [];
 
-    // Morning suggestions
     if (hour >= 4 && hour <= 10) {
-      dynamicSuggestions.push(ALL_TOOLS.find(t => t.href === '/duas')!);
-    }
-    // Evening/Night suggestions
-    else if (hour >= 18 || hour <= 3) {
-      dynamicSuggestions.push(ALL_TOOLS.find(t => t.href === '/reflections')!);
+      dynamicSuggestions.push(ALL_TOOLS.find((t) => t.href === '/duas')!);
+    } else if (hour >= 18 || hour <= 3) {
+      dynamicSuggestions.push(ALL_TOOLS.find((t) => t.href === '/reflections')!);
       if (hour >= 20 || hour <= 3) {
-        dynamicSuggestions.push(ALL_TOOLS.find(t => t.href === '/quran')!);
+        dynamicSuggestions.push(ALL_TOOLS.find((t) => t.href === '/quran')!);
       }
-    }
-    // Midday suggestions
-    else {
-      dynamicSuggestions.push(ALL_TOOLS.find(t => t.href === '/tasbih')!);
-      dynamicSuggestions.push(ALL_TOOLS.find(t => t.href === '/hadith')!);
+    } else {
+      dynamicSuggestions.push(ALL_TOOLS.find((t) => t.href === '/tasbih')!);
+      dynamicSuggestions.push(ALL_TOOLS.find((t) => t.href === '/hadith')!);
     }
 
     setSuggestedTools(dynamicSuggestions.filter(Boolean));
-    
     setFocusSupported(isSalahFocusSupported());
     if (user) {
-      getSalahLogs().then((logs) => {
-        const stats = calculateStreakStats(logs);
-        setStreak(stats.streak);
-      });
-      getCachedLearningProgress(user.id).then((progress) => {
-        if (progress) setMemorizationSurah(progress.unlockedSurah);
-      });
-      getSalahFocusConfig().then((cfg) => {
-        setFocusConfigured(cfg.setupComplete);
-      });
+      getSalahFocusConfig()
+        .then((cfg) => setFocusConfigured(cfg.setupComplete))
+        .catch(() => undefined);
     }
   }, [user]);
 
-  // Filter tools based on type
-  const displayTools = React.useMemo(() => {
+  const displayTools = useMemo(() => {
     if (type === 'quran_hadith') {
-      return ALL_TOOLS.filter(t =>
-        ['Read Quran', 'Read Hadith'].includes(t.title)
-      ).sort((a, b) => {
-        const order = ['Read Quran', 'Read Hadith'];
-        return order.indexOf(a.title) - order.indexOf(b.title);
-      });
+      const order = ['Read Quran', 'Read Hadith'];
+      return ALL_TOOLS.filter((t) => order.includes(t.title)).sort(
+        (a, b) => order.indexOf(a.title) - order.indexOf(b.title)
+      );
     }
     if (type === 'tasbih_azkar') {
-      return ALL_TOOLS.filter(t =>
-        ['Tasbih Counter', 'Duas & Azkar', '99 Names of Allah', 'Zakat Calculator'].includes(t.title)
-      ).sort((a, b) => {
-        const order = ['Tasbih Counter', 'Duas & Azkar', '99 Names of Allah', 'Zakat Calculator'];
-        return order.indexOf(a.title) - order.indexOf(b.title);
-      });
+      const order = ['Tasbih Counter', 'Duas & Azkar', '99 Names of Allah', 'Zakat Calculator'];
+      return ALL_TOOLS.filter((t) => order.includes(t.title)).sort(
+        (a, b) => order.indexOf(a.title) - order.indexOf(b.title)
+      );
     }
     if (type === 'tools') {
-      return ALL_TOOLS.filter(t =>
-        ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections', 'Guide'].includes(t.title)
-      ).sort((a, b) => {
-        const order = ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections', 'Guide'];
-        return order.indexOf(a.title) - order.indexOf(b.title);
-      });
+      const order = ['Qibla Compass', 'Hijri Calendar', 'Insights', 'Daily Reflections', 'Guide'];
+      return ALL_TOOLS.filter((t) => order.includes(t.title)).sort(
+        (a, b) => order.indexOf(a.title) - order.indexOf(b.title)
+      );
     }
     return ALL_TOOLS;
   }, [type]);
 
   const hubTitle =
-    type === 'quran_hadith' ? 'Quran & Hadith' :
-    type === 'tasbih_azkar' ? 'Tasbih & Azkar' :
-    type === 'tools' ? 'Tools' : 'Discover Hub';
+    type === 'quran_hadith'
+      ? 'Quran & Hadith'
+      : type === 'tasbih_azkar'
+        ? 'Tasbih & Azkar'
+        : type === 'tools'
+          ? 'Tools'
+          : 'Discover Hub';
+  const contentShell = responsive.isLarge
+    ? styles.contentLarge
+    : responsive.isTablet
+      ? styles.contentTablet
+      : null;
+  const columnCount = responsive.isTablet && displayTools.length >= 3 ? 3 : 2;
+  const tileWidth = columnCount === 3 ? styles.heroTileThird : styles.heroTileHalf;
+  const toolRows = useMemo(() => chunkTools(displayTools, columnCount), [displayTools, columnCount]);
 
   return (
-    <ScrollView style={[styles.screen, { backgroundColor: themeColors.bg }]} contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 14, 24) }, responsive.centerContent]}>
-      {/* Header */}
+    <ScrollView
+      style={[styles.screen, { backgroundColor: themeColors.bg }]}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: Math.max(insets.top + 14, 24) },
+        contentShell,
+      ]}
+    >
       <View style={styles.header}>
         <PressableScale onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
@@ -125,13 +126,12 @@ export default function HubScreen() {
         </View>
       </View>
 
-      {/* Up Next / Discover Section - Only show when no specific category is selected */}
-      {!type && (
+      {!type ? (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Up Next for You</Text>
           {user ? (
             <View style={styles.discoverGrid}>
-              <Link href={"/insights" as any} asChild>
+              <Link href="/insights" asChild>
                 <PressableScale style={[styles.discoverCard, { backgroundColor: themeColors.primarySoft, borderColor: themeColors.primaryTint }]}>
                   <Ionicons name="pie-chart" size={24} color={themeColors.primary} />
                   <Text style={[styles.discoverTitle, { color: themeColors.text }]}>Insights</Text>
@@ -146,7 +146,7 @@ export default function HubScreen() {
                     <Text style={[styles.discoverSubtitle, { color: themeColors.muted }]}>Set up to reduce distraction</Text>
                   </PressableScale>
                 </Link>
-              ) : suggestedTools.length > 0 && (
+              ) : suggestedTools.length > 0 ? (
                 <Link href={suggestedTools[0].href as any} asChild>
                   <PressableScale style={[styles.discoverCard, { backgroundColor: themeColors.goldSoft, borderColor: themeColors.goldBorder }]}>
                     <MaterialCommunityIcons name={suggestedTools[0].icon} size={24} color={themeColors.goldDeep} />
@@ -154,7 +154,7 @@ export default function HubScreen() {
                     <Text style={[styles.discoverSubtitle, { color: themeColors.muted }]}>Suggested for you</Text>
                   </PressableScale>
                 </Link>
-              )}
+              ) : null}
             </View>
           ) : (
             <View style={[styles.guestCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
@@ -169,59 +169,45 @@ export default function HubScreen() {
             </View>
           )}
         </View>
-      )}
+      ) : null}
 
-      {/* Tools */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: themeColors.text }]}>{type ? 'Tools' : 'All Tools'}</Text>
 
         <View style={styles.toolsGrid}>
-          {Array.from({ length: Math.ceil(displayTools.length / 2) }).map((_, rowIndex) => {
-            const tool1 = displayTools[rowIndex * 2];
-            const tool2 = displayTools[rowIndex * 2 + 1];
-            const isOddLastRow = !tool2 && displayTools.length % 2 === 1;
-            return (
-              <View key={rowIndex} style={styles.toolRow}>
-                <Link href={tool1.href as any} asChild>
-                  <PressableScale style={[styles.heroTile, isOddLastRow && type === 'tools' && styles.heroTileWide, { backgroundColor: tool1.tint, borderColor: tool1.tintBorder }]}>
-                    <View style={[styles.heroIconCircle, { backgroundColor: tool1.color }]}>  
-                      <MaterialCommunityIcons name={tool1.icon} size={26} color="#fff" />
-                    </View>
-                    <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{tool1.title}</Text>
-                    <Text style={[styles.heroArabic, { color: tool1.color }]} numberOfLines={1}>{tool1.arabic}</Text>
-                    <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{tool1.subtitle}</Text>
-                  </PressableScale>
-                </Link>
-
-                {tool2 ? (
-                  <Link href={tool2.href as any} asChild>
-                    <PressableScale style={[styles.heroTile, { backgroundColor: tool2.tint, borderColor: tool2.tintBorder, flex: 1 }]}>
-                      <View style={[styles.heroIconCircle, { backgroundColor: tool2.color }]}>  
-                        <MaterialCommunityIcons name={tool2.icon} size={26} color="#fff" />
+          {toolRows.map((row, rowIndex) => (
+            <View
+              key={`row-${rowIndex}`}
+              style={[styles.toolRow, row.length < columnCount && styles.toolRowIncomplete]}
+            >
+              {row.map((tool) => (
+                <View key={tool.title} style={tileWidth}>
+                  <Link href={tool.href as any} asChild>
+                    <PressableScale style={[styles.heroTile, { backgroundColor: tool.tint, borderColor: tool.tintBorder }]}>
+                      <View style={[styles.heroIconCircle, { backgroundColor: tool.color }]}>
+                        <MaterialCommunityIcons name={tool.icon} size={26} color="#fff" />
                       </View>
-                      <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{tool2.title}</Text>
-                      <Text style={[styles.heroArabic, { color: tool2.color }]} numberOfLines={1}>{tool2.arabic}</Text>
-                      <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{tool2.subtitle}</Text>
+                      <Text style={[styles.heroTitle, { color: themeColors.text }]} numberOfLines={1}>{tool.title}</Text>
+                      <Text style={[styles.heroArabic, { color: tool.color }]} numberOfLines={1}>{tool.arabic}</Text>
+                      <Text style={[styles.heroSubtitle, { color: themeColors.muted }]} numberOfLines={2}>{tool.subtitle}</Text>
                     </PressableScale>
                   </Link>
-                ) : (
-                  !isOddLastRow ? <View style={styles.heroTilePlaceholder} /> : null
-                )}
-              </View>
-            );
-          })}
+                </View>
+              ))}
+            </View>
+          ))}
         </View>
       </View>
     </ScrollView>
   );
 }
 
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: 16, gap: 24, paddingBottom: 40 },
+  content: { width: '100%', alignSelf: 'center', padding: 16, gap: 24, paddingBottom: 40 },
+  contentTablet: { maxWidth: 860 },
+  contentLarge: { maxWidth: 980 },
 
-  /* Header */
   header: {
     backgroundColor: colors.primaryDeep,
     borderRadius: radius.xl,
@@ -232,18 +218,19 @@ const styles = StyleSheet.create({
     ...shadow.raised,
   },
   backButton: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   headerTitle: { color: '#fff', fontSize: 22, fontWeight: '900', fontFamily: fonts.serif },
   headerSubtitle: { color: colors.onDarkMuted, marginTop: 6, fontSize: 13, lineHeight: 18 },
 
-  /* Section */
   section: { gap: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '800', fontFamily: fonts.serif, marginLeft: 4 },
 
-  /* Discover */
   discoverGrid: { flexDirection: 'row', gap: 12 },
   discoverCard: { flex: 1, padding: 16, borderRadius: radius.lg, borderWidth: 1, gap: 8, ...shadow.card },
   discoverTitle: { fontSize: 15, fontWeight: 'bold' },
@@ -254,17 +241,26 @@ const styles = StyleSheet.create({
   signInBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.sm, marginLeft: 12 },
   signInBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 
-  /* ── Hero grid ── */
   toolsGrid: {
     gap: 16,
   },
   toolRow: {
     flexDirection: 'row',
-    gap: 16,
+    justifyContent: 'space-between',
     alignItems: 'stretch',
+    gap: 14,
+  },
+  toolRowIncomplete: {
+    justifyContent: 'center',
+  },
+  heroTileHalf: {
+    width: '48.4%',
+  },
+  heroTileThird: {
+    width: '31.6%',
   },
   heroTile: {
-    flex: 1,
+    width: '100%',
     minHeight: 176,
     borderRadius: radius.xl,
     borderWidth: 1,
@@ -272,58 +268,29 @@ const styles = StyleSheet.create({
     gap: 10,
     ...shadow.card,
   },
-  heroTileWide: {
-    maxWidth: '100%',
-  },
-  heroTilePlaceholder: {
-    flex: 1,
-  },
   heroIconCircle: {
-    width: 52, height: 52, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 4,
     ...shadow.soft,
   },
   heroTitle: {
-    fontSize: 16, fontWeight: '900', fontFamily: fonts.serif,
+    fontSize: 16,
+    fontWeight: '900',
+    fontFamily: fonts.serif,
   },
   heroArabic: {
-    fontSize: 13, fontFamily: fonts.arabic, lineHeight: 22,
+    fontSize: 13,
+    fontFamily: fonts.arabic,
+    lineHeight: 22,
     marginTop: -4,
   },
   heroSubtitle: {
-    fontSize: 12, lineHeight: 17, fontWeight: '500',
-  },
-
-  /* ── Tool cards (remaining) ── */
-  toolCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: 14,
-    gap: 12,
-    overflow: 'hidden',
-    ...shadow.card,
-  },
-  toolIcon: {
-    width: 46, height: 46, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1,
-    flexShrink: 0,
-  },
-  toolBody: {
-    flex: 1, gap: 3, overflow: 'hidden',
-  },
-  toolTitle: {
-    fontSize: 15, fontWeight: '800', fontFamily: fonts.serif,
-  },
-  toolSub: {
-    fontSize: 12.5, lineHeight: 16, fontWeight: '500',
-  },
-  toolChevron: {
-    width: 24, height: 24,
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '500',
   },
 });

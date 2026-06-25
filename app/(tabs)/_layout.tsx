@@ -13,7 +13,7 @@ export default function TabsLayout() {
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          lazy: false,
+          lazy: true,
           // No cross-fade/shift — both caused the previous tab to bleed through.
           animation: 'none',
           freezeOnBlur: true,
