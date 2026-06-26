@@ -30,7 +30,79 @@ class AppBlockerService : Service() {
   private var blockedTargetPackage: String? = null
   private var lastBlockedNotifyAt = 0L
   private var lastHomeSentAt = 0L
+  private var allowWeDeenForegroundUntilMs = 0L
+  private var blockActivatedAtMs = 0L
   private var homeFallbackRunnable: Runnable? = null
+
+  private var audioFocusHeld = false
+  private var audioFocusRequestObj: android.media.AudioFocusRequest? = null
+  private val audioFocusListener =
+    android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
+      logDiag("audioFocus", "change=$focusChange held=$audioFocusHeld blocking=$blocking")
+      if (focusChange == android.media.AudioManager.AUDIOFOCUS_LOSS &&
+        audioFocusHeld && blocking
+      ) {
+        handler.postDelayed({ if (blocking) requestAudioFocusForBlock() }, AUDIO_REFOCUS_DELAY_MS)
+      }
+    }
+
+  private fun requestAudioFocusForBlock() {
+    if (audioFocusHeld) return
+    try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+      val result: Int
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val attrs = android.media.AudioAttributes.Builder()
+          .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+          .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
+          .build()
+        val req =
+          android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(attrs)
+            .setAcceptsDelayedFocusGain(false)
+            .setOnAudioFocusChangeListener(audioFocusListener, handler)
+            .build()
+        result = am.requestAudioFocus(req)
+        if (result == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+          audioFocusRequestObj = req
+        }
+      } else {
+        @Suppress("DEPRECATION")
+        result = am.requestAudioFocus(
+          audioFocusListener,
+          android.media.AudioManager.STREAM_MUSIC,
+          android.media.AudioManager.AUDIOFOCUS_GAIN,
+        )
+      }
+      audioFocusHeld = (result == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+      logDiag("audioFocus", "requested result=$result held=$audioFocusHeld")
+    } catch (e: Exception) {
+      Log.w(TAG, "diag audioFocus: request failed", e)
+    }
+  }
+
+  private fun releaseAudioFocusForBlock() {
+    if (!audioFocusHeld) {
+      audioFocusRequestObj = null
+      return
+    }
+    try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        audioFocusRequestObj?.let { am.abandonAudioFocusRequest(it) }
+        audioFocusRequestObj = null
+      } else {
+        @Suppress("DEPRECATION")
+        am.abandonAudioFocus(audioFocusListener)
+      }
+      audioFocusHeld = false
+      logDiag("audioFocus", "released")
+    } catch (e: Exception) {
+      Log.w(TAG, "diag audioFocus: release failed", e)
+      audioFocusHeld = false
+      audioFocusRequestObj = null
+    }
+  }
 
   private val pollRunnable = object : Runnable {
     override fun run() {
@@ -42,6 +114,7 @@ class AppBlockerService : Service() {
   private fun tick() {
     val foreground = resolveForegroundPackage()
     currentForeground = foreground
+    logTickState(foreground)
 
     if (foreground != null && isBlocked(foreground) && unlockController.hasTimeLeft) {
       val now = System.currentTimeMillis()
@@ -49,6 +122,7 @@ class AppBlockerService : Service() {
       consumingSinceMs = now
       cancelHomeFallback()
       if (unlockController.hasTimeLeft) {
+        logDiag("clearBlock", "earned-time active in blocked app $foreground")
         clearBlock()
       } else {
         Log.d(TAG, "Earned time exhausted in foreground app: $foreground")
@@ -66,29 +140,53 @@ class AppBlockerService : Service() {
       return
     }
 
-    if (blocking && foreground != null && isTransientOverlayPackage(foreground)) {
-      val target = blockedTargetPackage
-      if (target != null && isBlocked(target)) {
-        enforceBlock(target, BlockReason.OPENED, skipHomeFallback = true)
-      }
-      return
-    }
-
     if (blocking) {
       val target = blockedTargetPackage
       if (target != null) {
-        if (foreground == null || foreground == packageName || isLikelyHomeScreen(foreground)) {
-          enforceBlock(target, BlockReason.OPENED, skipHomeFallback = true)
-          return
-        }
-        if (foreground != null && !isBlocked(foreground)) {
-          clearBlock()
-        }
+        maintainActiveBlock(target, foreground)
+        lastForegroundPackage = foreground
         return
       }
     }
 
     lastForegroundPackage = foreground
+  }
+
+  /**
+   * Keep the Prayer Lock overlay up while [blocking] is true. Usage stats often
+   * report launcher/system/middleware (or go stale/null) while the blocked app
+   * is still visible under the overlay — never clear the block for that alone.
+   */
+  private fun maintainActiveBlock(target: String, foreground: String?) {
+    cancelHomeFallback()
+
+    if (foreground == packageName) {
+      logDiag("hide", "WeDeen foreground")
+      overlayManager.hide()
+      return
+    }
+
+    if (foreground != null && isLikelyHomeScreen(foreground)) {
+      logDiag("hide", "home/launcher foreground=$foreground")
+      overlayManager.hide()
+      return
+    }
+
+    if (foreground != null &&
+      (isTransientOverlayPackage(foreground) || isAppPrivacyGatePackage(foreground))
+    ) {
+      logDiag("ensureShown", "transient/privacy gate foreground=$foreground target=$target")
+      overlayManager.ensureShown(target, BlockReason.OPENED)
+      return
+    }
+
+    val reason = when {
+      foreground == null -> "usage stats stale/null"
+      !isBlocked(foreground) -> "foreground=$foreground not blocked"
+      else -> "maintain overlay"
+    }
+    logDiag("ensureShown", "$reason — keep blocking $target")
+    overlayManager.ensureShown(target, BlockReason.OPENED)
   }
 
   private fun isLikelyHomeScreen(packageName: String): Boolean =
@@ -98,16 +196,53 @@ class AppBlockerService : Service() {
   private fun resolveForegroundPackage(): String? {
     val hint = consumeAccessibilityHint()
     if (hint != null) return hint
-    return getCurrentForegroundPackageFromUsageStats()
+    val fromUsage = getCurrentForegroundPackageFromUsageStats()
+    if (fromUsage != null) return fromUsage
+    if (blocking) {
+      blockedTargetPackage?.let { target ->
+        if (isPackageRecentlyVisible(target)) {
+          logDiag("resolveForeground", "usage stale — assuming blocked target $target")
+          return target
+        }
+      }
+    }
+    return null
   }
 
-  private fun clearBlock() {
+  private fun isPackageRecentlyVisible(packageName: String): Boolean {
+    val usageStatsManager =
+      getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val endTime = System.currentTimeMillis()
+    val beginTime = endTime - ACTIVE_BLOCK_LOOKBACK_MS
+    return isPackageVisibleInWindow(usageStatsManager, packageName, beginTime, endTime)
+  }
+
+  private fun clearBlock(reason: String = "unspecified") {
     cancelHomeFallback()
     if (blocking) {
+      logDiag("clearBlock", reason)
       overlayManager.hide()
+      releaseAudioFocusForBlock()
       blocking = false
       blockedTargetPackage = null
+      blockActivatedAtMs = 0L
     }
+  }
+
+  private fun logTickState(foreground: String?) {
+    if (!DIAG_ENABLED) return
+    val fgBlocked = foreground?.let { isBlocked(it) } ?: false
+    Log.d(
+      TAG,
+      "diag tick fg=$foreground fgBlocked=$fgBlocked blocking=$blocking " +
+        "target=$blockedTargetPackage overlay=${overlayManager.isAttached()} " +
+        "lastFg=$lastForegroundPackage",
+    )
+  }
+
+  private fun logDiag(action: String, detail: String) {
+    if (!DIAG_ENABLED) return
+    Log.d(TAG, "diag $action: $detail")
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -127,6 +262,7 @@ class AppBlockerService : Service() {
     handler.removeCallbacks(pollRunnable)
     cancelHomeFallback()
     overlayManager.hide()
+    releaseAudioFocusForBlock()
     if (instanceRef?.get() === this) instanceRef = null
     super.onDestroy()
   }
@@ -138,9 +274,9 @@ class AppBlockerService : Service() {
   }
 
   /**
-   * Overlay-first block: show the Prayer Lock screen immediately. Only send the
-   * user HOME if the blocked app is still foreground after a short grace period
-   * (built-in fingerprint / PIN lock bypass). This feels intentional, not hijacky.
+   * Overlay-first block: keep the selected app covered, and request audio focus
+   * so media apps pause/duck while blocked. This avoids Accessibility and
+   * app-kill APIs.
    */
   private fun enforceBlock(
     packageName: String,
@@ -154,15 +290,16 @@ class AppBlockerService : Service() {
     if (firstIntercept) {
       maybeShowBlockedNotification(packageName, reason)
       recordIntercept(packageName)
+      blockActivatedAtMs = System.currentTimeMillis()
+      requestAudioFocusForBlock()
     }
 
     blocking = true
     blockedTargetPackage = packageName
     consumingSinceMs = 0L
 
-    if (!skipHomeFallback && !unlockController.hasTimeLeft) {
-      scheduleHomeFallbackIfNeeded(packageName)
-    }
+    // Keep Prayer Lock as a stable overlay, not an app-kill/home-bounce flow.
+    // Sending HOME here made some devices reopen/close the blocked app in a loop.
   }
 
   private fun scheduleHomeFallbackIfNeeded(packageName: String) {
@@ -206,6 +343,19 @@ class AppBlockerService : Service() {
 
   private fun isTransientOverlayPackage(packageName: String): Boolean =
     packageName in TRANSIENT_OVERLAY_PACKAGES
+
+  private fun isAppPrivacyGatePackage(packageName: String): Boolean {
+    if (packageName in VENDOR_APPLOCK_PACKAGES) return true
+    val lower = packageName.lowercase()
+    return lower.contains("applock") ||
+      lower.contains("privacy") ||
+      lower.contains("security") ||
+      lower.contains("biometric") ||
+      lower.contains("keyguard") ||
+      lower.contains("fingerpri") ||
+      lower.contains("faceunlock") ||
+      lower.contains("locksetting")
+  }
 
   private fun recordIntercept(packageName: String) {
     val appName = try {
@@ -292,15 +442,19 @@ class AppBlockerService : Service() {
         Log.d(TAG, "Granting $minutes minutes of earned time")
         unlockController.grant(minutes)
         consumingSinceMs = 0L
-        clearBlock()
+        clearBlock("temporary-unlock")
       }
       ACTION_RELOCK -> {
         Log.d(TAG, "Relock: dropping earned time")
         unlockController.clear()
         consumingSinceMs = 0L
+        allowWeDeenForegroundUntilMs = 0L
         lastForegroundPackage = null
         currentForeground = null
-        clearBlock()
+        clearBlock("relock")
+      }
+      ACTION_ALLOW_WEDEEN_FOREGROUND -> {
+        allowWeDeenForegroundUntilMs = System.currentTimeMillis() + WEDEEN_CONFIRMATION_GRACE_MS
       }
       ACTION_FOREGROUND_HINT -> {
         val pkg = intent.getStringExtra(EXTRA_FOREGROUND_PACKAGE)
@@ -331,10 +485,12 @@ class AppBlockerService : Service() {
     val usageStatsManager =
       getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     val endTime = System.currentTimeMillis()
-    val beginTime = endTime - LOOKBACK_WINDOW_MS
+    val beginTime = endTime - if (blocking) ACTIVE_BLOCK_LOOKBACK_MS else LOOKBACK_WINDOW_MS
 
     var fromEvents: String? = null
     var latestEventTime = 0L
+    var latestBlockedPackage: String? = null
+    var latestBlockedTime = 0L
     try {
       val events = usageStatsManager.queryEvents(beginTime, endTime)
       val event = UsageEvents.Event()
@@ -347,6 +503,10 @@ class AppBlockerService : Service() {
               latestEventTime = event.timeStamp
               fromEvents = event.packageName
             }
+            if (isBlocked(event.packageName) && event.timeStamp >= latestBlockedTime) {
+              latestBlockedTime = event.timeStamp
+              latestBlockedPackage = event.packageName
+            }
           }
         }
       }
@@ -354,9 +514,60 @@ class AppBlockerService : Service() {
       Log.w(TAG, "queryEvents failed", e)
     }
 
-    if (fromEvents != null) return fromEvents
+    if (fromEvents != null) {
+      if (isBlocked(fromEvents)) return fromEvents
 
-    return getMostRecentlyVisiblePackage(usageStatsManager, beginTime, endTime)
+      val recentBlocked = latestBlockedPackage
+      if (recentBlocked != null &&
+        latestBlockedTime >= endTime - BLOCKED_EVENT_GRACE_MS &&
+        (isTransientOverlayPackage(fromEvents) ||
+          isAppPrivacyGatePackage(fromEvents) ||
+          isLikelyHomeScreen(fromEvents))
+      ) {
+        logDiag(
+          "resolveForeground",
+          "latest=$fromEvents after blocked event $recentBlocked; treating as blocked"
+        )
+        return recentBlocked
+      }
+
+      if (blocking) {
+        blockedTargetPackage?.let { target ->
+          // Do not include home/launcher here. If the user presses Home, the
+          // launcher must reach maintainActiveBlock(), which hides the overlay.
+          // The earlier grace check still handles app-lock biometric transitions.
+          if ((fromEvents == packageName ||
+              isTransientOverlayPackage(fromEvents) ||
+              isAppPrivacyGatePackage(fromEvents)) &&
+            isPackageVisibleInWindow(
+              usageStatsManager,
+              target,
+              beginTime,
+              endTime,
+              ACTIVE_BLOCK_FALLBACK_TTL_MS
+            )
+          ) {
+            logDiag("resolveForeground", "latest=$fromEvents while $target still visible")
+            return target
+          }
+        }
+      }
+
+      return fromEvents
+    }
+
+    val fallback = getMostRecentlyVisiblePackage(usageStatsManager, beginTime, endTime)
+    if (fallback != null) return fallback
+
+    if (blocking) {
+      blockedTargetPackage?.let { target ->
+        if (isPackageVisibleInWindow(usageStatsManager, target, beginTime, endTime)) {
+          logDiag("resolveForeground", "events expired — blocked target $target still visible")
+          return target
+        }
+      }
+    }
+    return null
   }
 
   private fun getMostRecentlyVisiblePackage(
@@ -369,6 +580,7 @@ class AppBlockerService : Service() {
       val stats: List<UsageStats> =
         usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, beginTime, endTime)
           ?: return null
+      val ttlMs = if (blocking) ACTIVE_BLOCK_FALLBACK_TTL_MS else USAGE_STATS_FALLBACK_TTL_MS
       var bestPkg: String? = null
       var bestVisible = 0L
       for (stat in stats) {
@@ -377,13 +589,38 @@ class AppBlockerService : Service() {
           bestPkg = stat.packageName
         }
       }
-      if (bestPkg != null && bestVisible >= endTime - LOOKBACK_WINDOW_MS) {
+      if (bestPkg != null && bestVisible >= endTime - ttlMs) {
         return bestPkg
       }
     } catch (e: Exception) {
       Log.w(TAG, "queryUsageStats fallback failed", e)
     }
     return null
+  }
+
+  private fun isPackageVisibleInWindow(
+    usageStatsManager: UsageStatsManager,
+    packageName: String,
+    beginTime: Long,
+    endTime: Long,
+    ttlMs: Long = if (blocking) ACTIVE_BLOCK_FALLBACK_TTL_MS else USAGE_STATS_FALLBACK_TTL_MS,
+  ): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+    try {
+      val stats: List<UsageStats> =
+        usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, beginTime, endTime)
+          ?: return false
+      for (stat in stats) {
+        if (stat.packageName == packageName &&
+          stat.lastTimeVisible >= endTime - ttlMs
+        ) {
+          return true
+        }
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "queryUsageStats visibility check failed", e)
+    }
+    return false
   }
 
   private fun createChannelsIfNeeded() {
@@ -428,18 +665,27 @@ class AppBlockerService : Service() {
 
   companion object {
     private const val TAG = "ExpoAppBlocker"
+    /** Set false after field diagnosis; logs are scoped to Prayer Lock tick/overlay. */
+    private const val DIAG_ENABLED = true
     private const val CHANNEL_ID = "expo_app_blocker_channel_silent"
     private const val BLOCKED_CHANNEL_ID = "expo_app_blocker_blocked"
     private const val NOTIFICATION_ID = 9001
     private const val BLOCKED_NOTIFICATION_ID = 9002
-    private const val POLL_INTERVAL_MS = 450L
+    private const val POLL_INTERVAL_MS = 250L
     private const val LOOKBACK_WINDOW_MS = 8_000L
+    private const val ACTIVE_BLOCK_LOOKBACK_MS = 30_000L
+    private const val USAGE_STATS_FALLBACK_TTL_MS = 1_200L
+    private const val ACTIVE_BLOCK_FALLBACK_TTL_MS = 30_000L
+    private const val BLOCKED_EVENT_GRACE_MS = 15_000L
+    private const val AUDIO_REFOCUS_DELAY_MS = 800L
     private const val BLOCKED_NOTIFY_DEBOUNCE_MS = 60_000L
     private const val HOME_COOLDOWN_MS = 2_500L
     private const val HOME_FALLBACK_DELAY_MS = 450L
     private const val ACCESSIBILITY_HINT_TTL_MS = 1_200L
+    private const val WEDEEN_CONFIRMATION_GRACE_MS = 12_000L
     private const val ACTION_TEMPORARY_UNLOCK = "expo.modules.appblocker.TEMPORARY_UNLOCK"
     private const val ACTION_RELOCK = "expo.modules.appblocker.RELOCK"
+    private const val ACTION_ALLOW_WEDEEN_FOREGROUND = "expo.modules.appblocker.ALLOW_WEDEEN_FOREGROUND"
     private const val ACTION_FOREGROUND_HINT = "expo.modules.appblocker.FOREGROUND_HINT"
     private const val ACTION_SET_BLOCKED = "expo.modules.appblocker.SET_BLOCKED"
     private const val EXTRA_DURATION_MINUTES = "duration_minutes"
@@ -483,6 +729,23 @@ class AppBlockerService : Service() {
       "com.teslacoilsw.launcher",
       "com.microsoft.launcher",
       "com.google.android.apps.wellbeing",
+    )
+
+    private val VENDOR_APPLOCK_PACKAGES = setOf(
+      "com.samsung.android.privateshare",
+      "com.sec.android.app.securefolder",
+      "com.samsung.android.knox.containeragent",
+      "com.miui.privacycomputing",
+      "com.miui.permcenter",
+      "com.coloros.privacypermission",
+      "com.oppo.permissionmanager",
+      "com.vivo.permissionmanager",
+      "com.oneplus.security",
+      "net.dinglisch.android.applock",
+      "com.domobile.applock",
+      "com.domobile.applockwatcher",
+      "com.sp.protector.free",
+      "com.litetools.applock",
     )
 
     fun setAccessibilityBridge(@Suppress("UNUSED_PARAMETER") service: Any?) {
@@ -539,6 +802,13 @@ class AppBlockerService : Service() {
     fun relock(context: Context) {
       val intent = Intent(context, AppBlockerService::class.java).apply {
         action = ACTION_RELOCK
+      }
+      startCommand(context, intent)
+    }
+
+    fun allowWeDeenForeground(context: Context) {
+      val intent = Intent(context, AppBlockerService::class.java).apply {
+        action = ACTION_ALLOW_WEDEEN_FOREGROUND
       }
       startCommand(context, intent)
     }

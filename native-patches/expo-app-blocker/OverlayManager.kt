@@ -27,11 +27,18 @@ class OverlayManager(private val context: Context) {
   private var currentBlockedPackage: String? = null
   private var lastOverlayLine: String? = null
 
+  fun isAttached(): Boolean = overlayView?.isAttachedToWindow == true
+
   /** Show or re-attach the block overlay if the system removed it. */
   fun ensureShown(blockedPackageName: String, reason: BlockReason = BlockReason.OPENED) {
-    val attached = overlayView?.isAttachedToWindow == true
+    val attached = isAttached()
     val sameTarget = blockedPackageName == currentBlockedPackage
     if (attached && sameTarget) return
+    if (attached && !sameTarget) {
+      Log.d(TAG, "diag ensureShown: retarget $currentBlockedPackage -> $blockedPackageName")
+    } else if (!attached && sameTarget) {
+      Log.d(TAG, "diag ensureShown: reattach overlay for $blockedPackageName")
+    }
     hide()
     show(blockedPackageName, reason)
   }
@@ -45,7 +52,7 @@ class OverlayManager(private val context: Context) {
       windowManager.addView(view, params)
       overlayView = view
       overlayParams = params
-      Log.d(TAG, "Overlay shown for $blockedPackageName")
+      Log.d(TAG, "diag overlay shown for $blockedPackageName reason=${reason.slug}")
     } catch (e: Exception) {
       Log.e(TAG, "Failed to add overlay view", e)
       overlayView = null
@@ -60,7 +67,7 @@ class OverlayManager(private val context: Context) {
       if (view.isAttachedToWindow) {
         windowManager.removeView(view)
       }
-      Log.d(TAG, "Overlay hidden")
+      Log.d(TAG, "diag overlay hidden (target was $currentBlockedPackage)")
     } catch (e: Exception) {
       Log.e(TAG, "Failed to remove overlay view", e)
     }
@@ -78,8 +85,8 @@ class OverlayManager(private val context: Context) {
   }
 
   private fun openDeepLink(blockedPackageName: String, action: String, reason: BlockReason) {
+    AppBlockerService.allowWeDeenForeground(context)
     hide()
-    AppBlockerService.temporaryUnlock(context, 3)
 
     val appName = resolveAppName(blockedPackageName)
     val scheme = getAppScheme()
