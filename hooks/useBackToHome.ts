@@ -10,8 +10,6 @@ const STACK_ROOTS = new Set([
   'settings',
   'qibla',
   'names',
-  'salah-focus',
-  'blocked',
 ]);
 
 /** Android back on a non-home tab → Home. Prefer CustomTabBar handler when tabs are visible. */

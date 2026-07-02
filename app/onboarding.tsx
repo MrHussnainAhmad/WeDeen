@@ -17,15 +17,9 @@ export const ONBOARDING_KEY = 'wedeen_has_seen_onboarding_v1';
 const SLIDES = [
   {
     key: 'welcome',
-    title: 'Welcome to WeDeen',
+    title: 'Welcome to Muslim Deen: Quran & Prayer',
     description: 'A calm, distraction-free companion to build lasting habits of worship.',
     icon: 'moon-outline' as const,
-  },
-  {
-    key: 'prayer-lock',
-    title: 'Prayer Focus',
-    description: 'Use the Prayer Lock feature to temporarily block distracting apps during Salah times.',
-    icon: 'lock-closed-outline' as const,
   },
   {
     key: 'progress',

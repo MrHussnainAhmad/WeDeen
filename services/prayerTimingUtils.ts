@@ -151,7 +151,7 @@ export async function getActivePrayerWindow(
 }
 
 /** Earliest prayer that has started today but is not yet marked complete. */
-export async function getOutstandingPrayerLock(
+export async function getOutstandingPrayerWindow(
   loc: PrayerLocation,
   now: Date,
   windowMinutes: number,
@@ -296,4 +296,3 @@ export async function refreshWidgetDataTheme(scheme: 'light' | 'dark') {
     console.error('Failed to update widget theme in JSON:', err);
   }
 }
-

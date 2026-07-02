@@ -8,6 +8,7 @@ import { restoreDuaProgress, syncDuaProgress } from '@/services/duaLibraryServic
 import { restoreFastingLogs, syncFastingLogs } from '@/services/ramadanService';
 import { restoreFavoritePlaces, syncFavoritePlaces } from '@/services/placesService';
 import { restoreZakatHistory, syncZakatHistory } from '@/services/zakatService';
+import { restoreReflections } from '@/services/reflectionService';
 import { useAchievementStore } from '@/store/achievementStore';
 import { clearToken, clearUser, getToken, getUser, saveToken, saveUser } from '@/utils/secure';
 import type { User } from '@/types';
@@ -43,6 +44,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     syncFastingLogs(token).then(() => restoreFastingLogs(token)).catch(() => undefined);
     syncFavoritePlaces(token).then(() => restoreFavoritePlaces(token)).catch(() => undefined);
     syncDuaProgress(token).then(() => restoreDuaProgress(token)).catch(() => undefined);
+    restoreReflections(token).catch(() => undefined);
     
     const achStore = useAchievementStore.getState();
     achStore.hydrateAchievements(user.id).then(() => achStore.syncWithBackend(token, user.id)).catch(() => undefined);
@@ -88,6 +90,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       syncFastingLogs(token).then(() => restoreFastingLogs(token)).catch(() => undefined);
       syncFavoritePlaces(token).then(() => restoreFavoritePlaces(token)).catch(() => undefined);
       syncDuaProgress(token).then(() => restoreDuaProgress(token)).catch(() => undefined);
+      restoreReflections(token).catch(() => undefined);
       useAchievementStore.getState().syncWithBackend(token, profile.user.id).catch(() => undefined);
     } catch (err: any) {
       const status = err?.response?.status;

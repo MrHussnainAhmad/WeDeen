@@ -9,12 +9,31 @@ export type ReflectionEntry = {
   createdAt: number;
 };
 
+function sortReflections(items: ReflectionEntry[]): ReflectionEntry[] {
+  return [...items].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function mergeReflections(local: ReflectionEntry[], remote: ReflectionEntry[]): ReflectionEntry[] {
+  const byId = new Map<string, ReflectionEntry>();
+  for (const item of remote) {
+    if (item?.id) byId.set(item.id, item);
+  }
+  for (const item of local) {
+    if (!item?.id) continue;
+    const existing = byId.get(item.id);
+    if (!existing || item.createdAt >= existing.createdAt) {
+      byId.set(item.id, item);
+    }
+  }
+  return sortReflections(Array.from(byId.values()));
+}
+
 export async function getReflections(): Promise<ReflectionEntry[]> {
   try {
     const raw = await AsyncStorage.getItem(REFLECTIONS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as ReflectionEntry[];
-    return parsed.sort((a, b) => b.createdAt - a.createdAt);
+    return sortReflections(parsed);
   } catch {
     return [];
   }
@@ -46,17 +65,24 @@ export async function saveReflection(text: string, token: string | null): Promis
 }
 
 export async function restoreReflections(token: string): Promise<ReflectionEntry[]> {
+  const local = await getReflections();
   try {
     const { api } = require('./http');
     const { data } = await api.get('/sync/reflections', { headers: { Authorization: `Bearer ${token}` } });
     if (data?.items && Array.isArray(data.items)) {
-      await AsyncStorage.setItem(REFLECTIONS_KEY, JSON.stringify(data.items));
-      return data.items.sort((a: any, b: any) => b.createdAt - a.createdAt);
+      const merged = mergeReflections(local, data.items);
+      await AsyncStorage.setItem(REFLECTIONS_KEY, JSON.stringify(merged));
+      if (merged.length !== data.items.length || local.length) {
+        await api
+          .post('/sync/reflections', { items: merged }, { headers: { Authorization: `Bearer ${token}` } })
+          .catch(() => undefined);
+      }
+      return merged;
     }
   } catch {
     // Return local if sync fails
   }
-  return getReflections();
+  return local;
 }
 
 export async function deleteReflection(id: string, token: string | null): Promise<ReflectionEntry[]> {

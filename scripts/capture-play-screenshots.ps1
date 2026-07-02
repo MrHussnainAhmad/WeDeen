@@ -36,7 +36,7 @@ Grant-AppPermissions
 
 Write-Host ""
 Write-Host "Output folder: $OutDir" -ForegroundColor Yellow
-Write-Host "Open WeDeen on the device. Navigate to a screen, then press ENTER to capture." -ForegroundColor Yellow
+Write-Host "Open Muslim Deen: Quran & Prayer on the device. Navigate to a screen, then press ENTER to capture." -ForegroundColor Yellow
 Write-Host "When done, run: .\scripts\resize-play-screenshots.ps1" -ForegroundColor Yellow
 Write-Host "Type q + ENTER to quit." -ForegroundColor Yellow
 Write-Host ""

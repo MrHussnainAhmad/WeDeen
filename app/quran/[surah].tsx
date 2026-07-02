@@ -320,7 +320,7 @@ export default function SurahDetailScreen() {
       // fallback
     }
     const ref = `${surahData?.englishName} [${surahNumber}:${item.numberInSurah}]`;
-    const message = `"${plainArabic}"\n\n${translation}\n\n- ${ref}\nShared via WeDeen`;
+    const message = `"${plainArabic}"\n\n${translation}\n\n- ${ref}\nShared via Muslim Deen: Quran & Prayer`;
     await shareAsText(message, 'Share Verse');
     AchievementManager.trackEvent('dev_share', 1).catch(() => undefined);
   };
@@ -1058,7 +1058,7 @@ export default function SurahDetailScreen() {
             <StarFieldWatermark rows={3} cols={3} starSize={24} color="rgba(197,155,39,0.04)" />
             
             <View style={styles.hiddenCardWatermarkRow}>
-              <Text style={styles.hiddenCardWatermarkText}>WeDeen</Text>
+              <Text style={styles.hiddenCardWatermarkText}>Muslim Deen: Quran & Prayer</Text>
             </View>
 
             <Text style={styles.hiddenCardArabicText}>

@@ -81,7 +81,7 @@ export default function ResetPasswordScreen() {
           <StarFieldWatermark rows={3} cols={6} starSize={18} color="rgba(255,255,255,0.05)" />
           <EightPointStar size={46} color={colors.gold} filled={false} />
           <Text style={styles.title}>Choose a New Password</Text>
-          <Text style={styles.subtitle}>Secure your WeDeen account with a fresh password.</Text>
+          <Text style={styles.subtitle}>Secure your Muslim Deen: Quran & Prayer account with a fresh password.</Text>
         </View>
 
         <View style={styles.card}>

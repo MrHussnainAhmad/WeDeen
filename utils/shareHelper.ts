@@ -6,7 +6,7 @@ export async function shareAsText(content: string, title?: string) {
   try {
     await Share.share({
       message: content,
-      title: title || 'WeDeen Share',
+      title: title || 'Muslim Deen: Quran & Prayer Share',
     });
   } catch (error) {
     console.warn('[Share] Text share failed:', error);

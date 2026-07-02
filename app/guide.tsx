@@ -20,7 +20,7 @@ export default function GuideScreen() {
         <PressableScale onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </PressableScale>
-        <Text style={styles.headerTitle}>WeDeen Guides</Text>
+        <Text style={styles.headerTitle}>Muslim Deen: Quran & Prayer Guides</Text>
         <View style={{ width: 38 }} />
       </View>
 

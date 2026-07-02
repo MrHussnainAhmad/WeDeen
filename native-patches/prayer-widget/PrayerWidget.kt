@@ -197,16 +197,16 @@ class PrayerWidget : AppWidgetProvider() {
 
             if (widgetData == null) {
                 if (isSmall) {
-                    views.setTextViewText(R.id.current_prayer_text_small, "WeDeen")
+                    views.setTextViewText(R.id.current_prayer_text_small, "Muslim Deen: Quran & Prayer")
                     views.setTextColor(R.id.current_prayer_text_small, primaryTextColor)
-                    views.setTextViewText(R.id.next_prayer_name_small, "Open WeDeen")
+                    views.setTextViewText(R.id.next_prayer_name_small, "Open Muslim Deen: Quran & Prayer")
                     views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
                     views.setTextViewText(R.id.countdown_text_small, "to update location")
                     views.setTextColor(R.id.countdown_text_small, mutedTextColor)
                     views.setTextViewText(R.id.next_prayer_time_small, "--:--")
                     views.setTextColor(R.id.next_prayer_time_small, primaryTextColor)
                 } else if (isLarge) {
-                    views.setTextViewText(R.id.location_text, "Open WeDeen to update location")
+                    views.setTextViewText(R.id.location_text, "Open Muslim Deen: Quran & Prayer to update location")
                     views.setTextColor(R.id.location_text, mutedTextColor)
                     views.setTextViewText(R.id.metadata_text, "Method unavailable")
                     views.setTextColor(R.id.metadata_text, mutedTextColor)
@@ -214,7 +214,7 @@ class PrayerWidget : AppWidgetProvider() {
                 } else {
                     views.setTextViewText(R.id.current_prayer_text, "No Data")
                     views.setTextColor(R.id.current_prayer_text, primaryTextColor)
-                    views.setTextViewText(R.id.location_text, "Open WeDeen to update location")
+                    views.setTextViewText(R.id.location_text, "Open Muslim Deen: Quran & Prayer to update location")
                     views.setTextColor(R.id.location_text, mutedTextColor)
                     views.setTextViewText(R.id.next_prayer_name, "Prayer Timings")
                     views.setTextColor(R.id.next_prayer_name, primaryTextColor)
@@ -245,9 +245,9 @@ class PrayerWidget : AppWidgetProvider() {
 
                 if (todayTimings == null) {
                     if (isSmall) {
-                        views.setTextViewText(R.id.current_prayer_text_small, "WeDeen")
+                        views.setTextViewText(R.id.current_prayer_text_small, "Muslim Deen: Quran & Prayer")
                         views.setTextColor(R.id.current_prayer_text_small, primaryTextColor)
-                        views.setTextViewText(R.id.next_prayer_name_small, "Open WeDeen")
+                        views.setTextViewText(R.id.next_prayer_name_small, "Open Muslim Deen: Quran & Prayer")
                         views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
                         views.setTextViewText(R.id.countdown_text_small, "to sync calendar")
                         views.setTextColor(R.id.countdown_text_small, mutedTextColor)
@@ -260,7 +260,7 @@ class PrayerWidget : AppWidgetProvider() {
                         views.setTextColor(R.id.metadata_text, mutedTextColor)
                         views.setTextColor(R.id.widget_clock, primaryTextColor)
                     } else {
-                        views.setTextViewText(R.id.current_prayer_text, "Open WeDeen")
+                        views.setTextViewText(R.id.current_prayer_text, "Open Muslim Deen: Quran & Prayer")
                         views.setTextColor(R.id.current_prayer_text, primaryTextColor)
                         views.setTextViewText(R.id.location_text, locationName)
                         views.setTextColor(R.id.location_text, mutedTextColor)
@@ -608,7 +608,7 @@ class PrayerWidget : AppWidgetProvider() {
                 if (isSmall) {
                     views.setTextViewText(R.id.current_prayer_text_small, "Error")
                     views.setTextColor(R.id.current_prayer_text_small, primaryTextColor)
-                    views.setTextViewText(R.id.next_prayer_name_small, "Open WeDeen")
+                    views.setTextViewText(R.id.next_prayer_name_small, "Open Muslim Deen: Quran & Prayer")
                     views.setTextColor(R.id.next_prayer_name_small, primaryTextColor)
                     views.setTextViewText(R.id.countdown_text_small, "to reload")
                     views.setTextColor(R.id.countdown_text_small, mutedTextColor)

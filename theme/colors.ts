@@ -1,4 +1,4 @@
-// WeDeen design tokens — "Emerald & Gold Heritage"
+// Muslim Deen: Quran & Prayer design tokens — "Emerald & Gold Heritage"
 // Backward compatible: original keys (bg, card, text, muted, primary, border) preserved.
 
 export type ThemeColors = typeof lightColors;

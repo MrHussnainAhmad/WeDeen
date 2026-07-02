@@ -45,7 +45,7 @@ async function resolveManualCity(city: string) {
     `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`,
     {
       headers: {
-        'User-Agent': 'WeDeenApp/1.0',
+        'User-Agent': 'MuslimDeenQuranPrayerApp/1.0',
       },
     }
   );
@@ -123,7 +123,7 @@ export async function searchNearbyPlaces(options: {
     const response = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       headers: {
-        'User-Agent': 'WeDeenApp/1.0',
+        'User-Agent': 'MuslimDeenQuranPrayerApp/1.0',
       },
       body: overpassQuery(origin.latitude, origin.longitude),
     });

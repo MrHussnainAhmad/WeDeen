@@ -82,7 +82,7 @@ export function HadithList({ slug, section }: { slug: string; section: string })
     const gradeText = item.grades?.[0] ? `\nGrade: ${item.grades[0].grade} (${item.grades[0].name})` : '';
     const bookTitle = getBookTitle(slug);
     const refText = `Reference: ${bookTitle} - Hadith ${item.number}`;
-    return `${gradeText}\n\n- ${refText}\nShared via WeDeen`;
+    return `${gradeText}\n\n- ${refText}\nShared via Muslim Deen: Quran & Prayer`;
   };
 
   const handleShareArabicText = async (item: HadithItem) => {
@@ -283,7 +283,7 @@ export function HadithList({ slug, section }: { slug: string; section: string })
             <StarFieldWatermark rows={4} cols={4} starSize={20} color="rgba(197,155,39,0.05)" />
             
             <View style={styles.hiddenCardWatermarkRow}>
-              <Text style={styles.hiddenCardWatermarkText}>WeDeen</Text>
+              <Text style={styles.hiddenCardWatermarkText}>Muslim Deen: Quran & Prayer</Text>
             </View>
 
             {shareHadithData.arabic ? (

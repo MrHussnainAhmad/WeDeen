@@ -1,6 +1,6 @@
 # Private Property Notice
 
-This `ui` codebase is private and proprietary property of the WeDeen project owner.
+This `ui` codebase is private and proprietary property of the Muslim Deen: Quran & Prayer project owner.
 
 ## Restrictions
 - No unauthorized copying, sharing, publishing, or redistribution.

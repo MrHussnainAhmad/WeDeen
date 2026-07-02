@@ -231,8 +231,6 @@ export async function setPrayerStatus(
   token?: string | null,
   userId?: string | null
 ) {
-  if (!userId) return; // Strict gating: Do not save progress for guests
-
   const logs = await getSalahLogs();
   if (!logs[dateKey]) {
     logs[dateKey] = {} as DaySalahLog;

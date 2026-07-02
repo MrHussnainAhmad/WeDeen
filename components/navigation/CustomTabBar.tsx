@@ -18,12 +18,7 @@ type TabSpec = {
 
 const TAB_SPECS: TabSpec[] = [
   { routeName: 'hijri', label: 'Timings', icon: 'time-outline', iconFocused: 'time' },
-  {
-    routeName: 'prayer-lock',
-    label: 'Prayer Lock',
-    icon: 'lock-closed-outline',
-    iconFocused: 'lock-closed',
-  },
+  { routeName: 'lock', label: 'Lock', icon: 'lock-closed-outline', iconFocused: 'lock-closed' },
   { routeName: 'index', label: 'Home', icon: 'home-outline', iconFocused: 'home', center: true },
   {
     routeName: 'memorization',
@@ -43,8 +38,6 @@ const STACK_ROOTS = new Set([
   'settings',
   'qibla',
   'names',
-  'salah-focus',
-  'blocked',
 ]);
 
 function SideTabButton({
@@ -145,7 +138,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const bottomPad = Math.max(insets.bottom, 10);
   const segments = useSegments();
 
-  // Hardware back on Timings / Prayer Lock / Memorize / Profile → Home tab.
+  // Hardware back on non-home tabs -> Home tab.
   useEffect(() => {
     const onBack = () => {
       const root = segments[0];
@@ -253,7 +246,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   sideIconWrap: {
-    width: 34,
+    width: 32,
     height: 28,
     borderRadius: 10,
     alignItems: 'center',
@@ -264,7 +257,7 @@ const styles = StyleSheet.create({
   },
   sideLabel: {
     marginTop: 2,
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '700',
     color: '#93A39B',
     textAlign: 'center',

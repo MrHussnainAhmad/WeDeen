@@ -10,7 +10,6 @@ import { useThemeColors } from '@/theme/useThemeColors';
 import { useResponsive } from '@/theme/responsive';
 import { PressableScale } from '@/components/Anim';
 import { getSalahLogs, getTodayStr, calculateStreakStats, calculateConsistencyScore, setPrayerStatus, type DaySalahLog } from '@/services/prayerTrackerService';
-import { getSalahFocusTotalCompleted } from '@/services/salahFocusService';
 import { type PrayerLabel } from '@/services/prayerTimingUtils';
 
 export default function PrayerTrackerScreen() {
@@ -23,7 +22,6 @@ export default function PrayerTrackerScreen() {
   const [thisWeekCount, setThisWeekCount] = useState(0);
   const [mostMissed, setMostMissed] = useState<string>('None');
   const [consistencyScore, setConsistencyScore] = useState(0);
-  const [focusCompleted, setFocusCompleted] = useState(0);
 
   const obligatory: PrayerLabel[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
@@ -89,8 +87,6 @@ export default function PrayerTrackerScreen() {
       const score = calculateConsistencyScore(savedLogs);
       setConsistencyScore(score);
 
-      const focusCount = await getSalahFocusTotalCompleted();
-      setFocusCompleted(focusCount);
     } catch (err) {
       console.error('Failed to load prayer tracker data:', err);
     }
@@ -309,18 +305,6 @@ export default function PrayerTrackerScreen() {
             </View>
           </View>
 
-          {/* Card 5: Prayer Lock */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-            <View style={[styles.statIconWrap, { backgroundColor: themeColors.goldSoft }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={themeColors.goldDeep} />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={[styles.statLabel, { color: themeColors.muted }]}>Prayer Focus</Text>
-              <Text style={[styles.statValue, { color: themeColors.text }]}>
-                {focusCompleted > 0 ? `Stayed focused during ${focusCompleted} prayers` : 'No focused prayers yet'}
-              </Text>
-            </View>
-          </View>
         </View>
       </ScrollView>
     </View>

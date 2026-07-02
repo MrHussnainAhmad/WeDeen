@@ -8,9 +8,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "web": "expo start --web",
-    "postinstall": "node scripts/patch-prayer-lock-native.js",
     "validate:android": "node scripts/validate-android-build.js",
-    "eas-build-post-install": "node scripts/patch-prayer-lock-native.js",
     "ios": "expo run:ios"
   },
   "dependencies": {
@@ -21,7 +19,6 @@
     "axios": "^1.7.7",
     "crypto-js": "^4.2.0",
     "expo": "~54.0.0",
-    "expo-app-blocker": "^0.1.74",
     "expo-asset": "~12.0.13",
     "expo-av": "~16.0.8",
     "expo-background-task": "~1.0.10",

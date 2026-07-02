@@ -1,5 +1,5 @@
 /**
- * Generates `assets/images/logo-mark.png`: the WeDeen logo artwork with its
+ * Generates `assets/images/logo-mark.png`: the Muslim Deen: Quran & Prayer logo artwork with its
  * white background removed and cropped tight to the artwork, preserving the
  * true aspect ratio. This lets the logo render undistorted on any background
  * (ivory boot screen, dark-green block screen, square native overlay) instead

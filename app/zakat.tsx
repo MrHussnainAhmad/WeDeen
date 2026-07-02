@@ -129,7 +129,7 @@ export default function ZakatScreen() {
   };
 
   const share = async (item = calculation) => {
-    await Share.share({ message: buildZakatReport(item), title: 'WeDeen Zakat Report' });
+    await Share.share({ message: buildZakatReport(item), title: 'Muslim Deen: Quran & Prayer Zakat Report' });
   };
 
   const loadReportIntoForm = (item: ZakatCalculation) => {

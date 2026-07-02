@@ -11,7 +11,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 // Log the API base URL in development to help debug
 if (__DEV__) {
-  console.log('[WeDeen HTTP] Base API URL:', API_BASE_URL);
+  console.log('[Muslim Deen: Quran & Prayer HTTP] Base API URL:', API_BASE_URL);
 }
 
 export const api = axios.create({

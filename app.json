@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "WeDeen",
+    "name": "Muslim Deen: Quran & Prayer",
     "slug": "wedeen",
     "scheme": "wedeen",
     "version": "1.0.3",
@@ -49,27 +49,8 @@
         }
       ],
       "expo-router",
-      [
-        "expo-app-blocker",
-        {
-          "android": {
-            "scheme": "wedeen",
-            "overlayTitle": "WeDeen",
-            "overlayText": "Salah is calling…",
-            "overlayBackgroundColor": "#0F3D2E",
-            "overlayTitleColor": "#FFFFFF",
-            "overlayTextColor": "rgba(255,255,255,0.88)",
-            "overlay": {
-              "icon": "./assets/images/logo-mark.png"
-            }
-          },
-          "ios": {
-            "enabled": false
-          }
-        }
-      ],
-      "./plugins/withWedeenPrayerLockAndroid.js",
       "./plugins/withWedeenPrayerWidgetAndroid.js",
+      "./plugins/withWedeenPrayerLock.js",
       [
         "expo-notifications",
         {
@@ -83,8 +64,8 @@
         "expo-location",
         {
           "isAndroidBackgroundLocationEnabled": true,
-          "locationAlwaysAndWhenInUsePermission": "Allow WeDeen to use your location to keep prayer times and the adhan accurate while you travel.",
-          "locationWhenInUsePermission": "Allow WeDeen to use your location to calculate accurate prayer times for your area."
+          "locationAlwaysAndWhenInUsePermission": "Allow Muslim Deen: Quran & Prayer to use your location to keep prayer times and the adhan accurate while you travel.",
+          "locationWhenInUsePermission": "Allow Muslim Deen: Quran & Prayer to use your location to calculate accurate prayer times for your area."
         }
       ],
       "expo-asset"

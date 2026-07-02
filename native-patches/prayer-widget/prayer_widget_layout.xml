@@ -28,7 +28,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="WeDeen"
+            android:text="Muslim Deen: Quran & Prayer"
             android:textColor="#D4AD3A"
             android:textSize="14sp"
             android:textStyle="bold|italic" />

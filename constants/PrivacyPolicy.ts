@@ -2,9 +2,9 @@ export const PRIVACY_POLICY_MD = `# Privacy Policy
 
 Last updated: June 2026
 
-WeDeen — Your Daily Muslim Companion ("App", "we", "our", or "us") respects your privacy and is
+Muslim Deen: Quran & Prayer — Your Daily Muslim Companion ("App", "we", "our", or "us") respects your privacy and is
 committed to protecting your personal information. This Privacy Policy explains how we collect,
-use, store, and protect your data when you use the WeDeen application.
+use, store, and protect your data when you use the Muslim Deen: Quran & Prayer application.
 
 By using the App, you agree to the terms of this Privacy Policy.
 
@@ -55,7 +55,7 @@ marketing purposes.
 
 ## Third-Party APIs and Services
 
-WeDeen integrates with the following third-party services to deliver content:
+Muslim Deen: Quran & Prayer integrates with the following third-party services to deliver content:
 
 - **AlQuran.cloud API** — Used to fetch the full Quran text and audio recitations. Data is
   downloaded to your device and used offline. No personal data is shared with this service.
@@ -88,7 +88,7 @@ security. We encourage you to use a strong, unique password for your account.
 
 ## Offline Data and Local Storage
 
-WeDeen is designed to function offline after initial setup. The following data is stored
+Muslim Deen: Quran & Prayer is designed to function offline after initial setup. The following data is stored
 locally on your device:
 
 - Full Quran text (Arabic + translation)
@@ -113,7 +113,7 @@ uninstalling the App or clearing app data through your device settings.
 
 ## Children's Privacy
 
-WeDeen is designed for users of **all ages**. Children are warmly welcomed to use the App to
+Muslim Deen: Quran & Prayer is designed for users of **all ages**. Children are warmly welcomed to use the App to
 read and listen to the Holy Quran, explore daily Islamic reminders, and benefit from its
 educational content.
 
@@ -161,5 +161,5 @@ please contact us at:
 
 ---
 
-*WeDeen — Your Daily Muslim Companion*
+*Muslim Deen: Quran & Prayer — Your Daily Muslim Companion*
 `;

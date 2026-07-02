@@ -21,13 +21,13 @@ export type Achievement = {
 
 const INITIAL_ACHIEVEMENTS: Achievement[] = [
   // Salah Warrior
-  { id: 'salah_1', title: 'First Step', description: 'Pray your first Salah via WeDeen', category: 'salah', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'salah_1', title: 'First Step', description: 'Pray your first Salah via Muslim Deen: Quran & Prayer', category: 'salah', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'salah_2', title: 'Five Pillars', description: 'Pray all 5 prayers in one day', category: 'salah', tier: 'Silver', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'salah_3', title: 'Week of Devotion', description: 'Pray all 5 prayers for 7 consecutive days', category: 'salah', tier: 'Gold', targetValue: 7, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'salah_4', title: 'Steadfast', description: 'Pray all 5 prayers for 30 consecutive days', category: 'salah', tier: 'Platinum', targetValue: 30, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'salah_5', title: 'Never Miss Fajr', description: 'Pray Fajr 7 days in a row', category: 'salah', tier: 'Silver', targetValue: 7, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'salah_6', title: 'Dawn Guardian', description: 'Pray Fajr 30 days in a row', category: 'salah', tier: 'Gold', targetValue: 30, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
-  { id: 'salah_7', title: '100 Prayers', description: 'Pray 100 total prayers via WeDeen', category: 'salah', tier: 'Gold', targetValue: 100, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'salah_7', title: '100 Prayers', description: 'Pray 100 total prayers via Muslim Deen: Quran & Prayer', category: 'salah', tier: 'Gold', targetValue: 100, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'salah_8', title: "Ummah's Pride", description: 'Pray 500 total prayers', category: 'salah', tier: 'Platinum', targetValue: 500, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
 
   // Quran Journey
@@ -69,7 +69,7 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: 'hadith_5', title: 'Book Collector', description: 'Open all available Hadith books', category: 'hadith', tier: 'Silver', targetValue: 9, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
 
   // Devotion
-  { id: 'dev_1', title: 'Welcome', description: 'Open WeDeen for the first time', category: 'devotion', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
+  { id: 'dev_1', title: 'Welcome', description: 'Open Muslim Deen: Quran & Prayer for the first time', category: 'devotion', tier: 'Bronze', targetValue: 1, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'dev_2', title: 'Daily Visitor', description: 'Open app 7 days in a row', category: 'devotion', tier: 'Silver', targetValue: 7, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'dev_3', title: 'Faithful', description: 'Open app 30 days in a row', category: 'devotion', tier: 'Gold', targetValue: 30, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },
   { id: 'dev_4', title: 'Qibla Finder', description: 'Use Qibla Compass 5 times', category: 'devotion', tier: 'Bronze', targetValue: 5, currentValue: 0, isUnlocked: false, unlockedAt: null, imageAsset: '' },

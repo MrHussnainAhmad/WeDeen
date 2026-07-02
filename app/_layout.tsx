@@ -7,7 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, Easing, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { getColors, colors } from '@/theme/colors';
@@ -39,17 +39,12 @@ import { AdhanAlarmModal } from '@/components/AdhanAlarmModal';
 import { CustomAlertProvider } from '@/components/CustomAlertProvider';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
 import { AppLogo } from '@/components/AppLogo';
-import { subscribePrayerFocus, refreshPrayerFocusNow } from '@/services/prayerFocusCoordinator';
 import { syncMemorizationQueueThrottled } from '@/services/memorizationService';
 import { useAchievementStore, AchievementManager } from '@/store/achievementStore';
 import { ACHIEVEMENT_IMAGES } from '@/utils/achievementImages';
 import * as FileSystem from 'expo-file-system/legacy';
 import { markPrayerAsPrayed } from '@/services/prayerTrackerService';
 import { scheduleUpcomingIslamicEventReminders } from '@/services/hijriCalendarService';
-
-function openPrayerLockTab() {
-  router.push('/prayer-lock' as any);
-}
 
 const SAVED_LOCATION_KEY = 'timings_location_v1';
 
@@ -147,11 +142,6 @@ export default function RootLayout() {
     return () => {
       mounted = false;
     };
-  }, []);
-
-  // Prayer-focus coordinator runs in the background; do not auto-open the tab.
-  useEffect(() => {
-    return subscribePrayerFocus(() => undefined);
   }, []);
 
   // Sync widget offline actions
@@ -303,11 +293,6 @@ export default function RootLayout() {
               };
             }
             ringAdhan(String(data?.prayer ?? 'Prayer')).catch(() => undefined);
-            refreshPrayerFocusNow(false)
-              .then((focus) => {
-                if (focus?.isLockActive) openPrayerLockTab();
-              })
-              .catch(() => undefined);
             return {
               shouldShowBanner: false,
               shouldShowList: false,
@@ -592,8 +577,6 @@ export default function RootLayout() {
         <Stack.Screen name="names/[type]" options={{ title: '99 Names' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="reset-password" options={{ title: 'Reset Password' }} />
-        <Stack.Screen name="salah-focus" options={{ title: 'Prayer Lock Setup' }} />
-        <Stack.Screen name="blocked" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
         <Stack.Screen name="tasbih" options={{ headerShown: false, title: 'Tasbih Counter' }} />
         <Stack.Screen name="zakat" options={{ headerShown: false, title: 'Zakat Calculator' }} />
         <Stack.Screen name="places" options={{ headerShown: false, title: 'Halal & Mosque Finder' }} />

@@ -25,37 +25,17 @@ function getVolumeManager(): (VolumeManagerModule & VolumeManagerExtras) | null 
   }
 }
 
-function getNativeBlocker() {
-  if (Constants.appOwnership === 'expo') return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { requireNativeModule } = require('expo-modules-core');
-    return requireNativeModule('ExpoAppBlocker');
-  } catch {
-    return null;
-  }
-}
-
 export function isQuranFocusActive(): boolean {
   return focusActive;
 }
 
 export async function checkDndPermission(): Promise<boolean> {
-  if (Platform.OS === 'android') {
-    const native = getNativeBlocker();
-    if (!native?.checkDndPermission) return false;
-    return native.checkDndPermission();
-  }
+  if (Platform.OS === 'android') return false;
   // iOS has no programmatic DND toggle — user manages Focus in Settings.
   return true;
 }
 
 export function openDndSettings(): void {
-  if (Platform.OS === 'android') {
-    const native = getNativeBlocker();
-    native?.openDndSettings?.();
-    return;
-  }
   Linking.openSettings().catch(() => undefined);
 }
 
@@ -66,17 +46,8 @@ export async function enableQuranFocus(): Promise<{ ok: boolean; reason?: 'permi
   }
 
   if (Platform.OS === 'android') {
-    const native = getNativeBlocker();
-    if (!native?.enableFocusMode) {
-      focusActive = true;
-      return { ok: true, reason: 'unsupported' };
-    }
-    const hasPermission = await native.checkDndPermission();
-    if (!hasPermission) return { ok: false, reason: 'permission' };
-    const ok = await native.enableFocusMode();
-    if (!ok) return { ok: false, reason: 'permission' };
     focusActive = true;
-    return { ok: true };
+    return { ok: true, reason: 'unsupported' };
   }
 
   if (Platform.OS === 'ios') {
@@ -104,10 +75,7 @@ export async function disableQuranFocus(): Promise<void> {
     return;
   }
 
-  if (Platform.OS === 'android') {
-    const native = getNativeBlocker();
-    native?.disableFocusMode?.();
-  } else if (Platform.OS === 'ios' && savedIosVolume != null) {
+  if (Platform.OS === 'ios' && savedIosVolume != null) {
     const vm = getVolumeManager();
     if (vm) {
       try {

@@ -21,7 +21,7 @@ export default function TabsLayout() {
         }}
       >
       <Tabs.Screen name="hijri" options={{ title: 'Timings' }} />
-      <Tabs.Screen name="prayer-lock" options={{ title: 'Prayer Lock' }} />
+      <Tabs.Screen name="lock" options={{ title: 'Lock' }} />
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="memorization" options={{ title: 'Memorize' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />

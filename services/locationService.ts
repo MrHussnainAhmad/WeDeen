@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { isPrayerLocationConfigured } from './prayerTimingUtils';
-import { refreshPrayerFocusNow } from './prayerFocusCoordinator';
 import { schedulePrayerAdhan } from './prayerNotificationService';
 
 // Shared with the Timings tab / Home widget. Location lives only on-device.
@@ -35,7 +34,6 @@ export async function hasPrayerLocationConfigured() {
 
 export async function saveLocation(loc: SavedLocation) {
   await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(loc));
-  refreshPrayerFocusNow(false).catch(() => undefined);
 }
 
 function distanceKm(aLat: number, aLon: number, bLat: number, bLon: number) {
@@ -96,7 +94,6 @@ export async function maybeRefreshLocation(): Promise<boolean> {
     };
     await saveLocation(next);
     await schedulePrayerAdhan(next).catch(() => undefined);
-    refreshPrayerFocusNow(false).catch(() => undefined);
     return true;
   } catch {
     return false;

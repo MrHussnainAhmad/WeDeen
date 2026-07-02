@@ -109,7 +109,7 @@ export function buildZakatReport(item: ZakatCalculation) {
 
   return [
     '════════════════════════════════════',
-    '        WeDeen Zakat Report         ',
+    '        Muslim Deen: Quran & Prayer Zakat Report         ',
     '════════════════════════════════════',
     `Date: ${dateStr}`,
     '------------------------------------',
@@ -129,7 +129,7 @@ export function buildZakatReport(item: ZakatCalculation) {
     `Status: ${item.zakatableTotal >= item.nisabThreshold ? 'OBLIGATORY' : 'Not Obligatory (Below Nisab)'}`,
     '',
     'Estimate only. Please verify complex asset categories with a local scholar.',
-    'Calculated using WeDeen App.',
+    'Calculated using Muslim Deen: Quran & Prayer App.',
   ].join('\n');
 }
 

@@ -8,7 +8,6 @@ import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useResponsive } from '@/theme/responsive';
 import { useThemeColors } from '@/theme/useThemeColors';
 import { useAuthStore } from '@/store/authStore';
-import { getSalahFocusConfig, isSalahFocusSupported } from '@/services/salahFocusService';
 
 const ALL_TOOLS = [
   { href: '/quran', title: 'Read Quran', arabic: 'القرآن الكريم', subtitle: 'Tajweed & translations', icon: 'book-open-page-variant' as const, color: '#0B6B4F', tint: '#E7F1EC', tintBorder: '#D2E6DD' },
@@ -21,7 +20,7 @@ const ALL_TOOLS = [
   { href: { pathname: '/names/[type]', params: { type: 'allah' } }, title: '99 Names of Allah', arabic: 'أسماء الله الحسنى', subtitle: 'Audio & meanings', icon: 'star-four-points-outline' as const, color: '#A0522D', tint: '#F5EDE5', tintBorder: '#E2CDB8' },
   { href: '/zakat', title: 'Zakat Calculator', arabic: 'حاسبة الزكاة', subtitle: 'Obligatory 2.5% Zakat', icon: 'calculator-variant' as const, color: '#5A7040', tint: '#EDF2E8', tintBorder: '#D5E0CC' },
   { href: '/insights', title: 'Insights', arabic: 'رؤى العبادة', subtitle: 'Worship trends', icon: 'chart-pie' as const, color: '#D4830A', tint: '#FDF3E3', tintBorder: '#F0DDBA' },
-  { href: '/guide', title: 'Guide', arabic: 'الدليل', subtitle: 'How to use WeDeen', icon: 'book-information-variant' as const, color: '#4A6572', tint: '#EBEFF1', tintBorder: '#CAD4DA' },
+  { href: '/guide', title: 'Guide', arabic: 'الدليل', subtitle: 'How to use Muslim Deen: Quran & Prayer', icon: 'book-information-variant' as const, color: '#4A6572', tint: '#EBEFF1', tintBorder: '#CAD4DA' },
 ];
 
 function chunkTools<T>(items: T[], columns: number) {
@@ -39,8 +38,6 @@ export default function HubScreen() {
   const { user } = useAuthStore();
   const { type } = useLocalSearchParams<{ type?: string }>();
 
-  const [focusConfigured, setFocusConfigured] = useState(true);
-  const [focusSupported, setFocusSupported] = useState(false);
   const [suggestedTools, setSuggestedTools] = useState<typeof ALL_TOOLS>([]);
 
   useEffect(() => {
@@ -60,13 +57,7 @@ export default function HubScreen() {
     }
 
     setSuggestedTools(dynamicSuggestions.filter(Boolean));
-    setFocusSupported(isSalahFocusSupported());
-    if (user) {
-      getSalahFocusConfig()
-        .then((cfg) => setFocusConfigured(cfg.setupComplete))
-        .catch(() => undefined);
-    }
-  }, [user]);
+  }, []);
 
   const displayTools = useMemo(() => {
     if (type === 'quran_hadith') {
@@ -138,15 +129,7 @@ export default function HubScreen() {
                   <Text style={[styles.discoverSubtitle, { color: themeColors.muted }]}>View your worship trends</Text>
                 </PressableScale>
               </Link>
-              {focusSupported && !focusConfigured ? (
-                <Link href="/salah-focus" asChild>
-                  <PressableScale style={[styles.discoverCard, { backgroundColor: themeColors.dangerSoft, borderColor: themeColors.danger }]}>
-                    <Ionicons name="lock-closed" size={24} color={themeColors.danger} />
-                    <Text style={[styles.discoverTitle, { color: themeColors.text }]}>Prayer Lock</Text>
-                    <Text style={[styles.discoverSubtitle, { color: themeColors.muted }]}>Set up to reduce distraction</Text>
-                  </PressableScale>
-                </Link>
-              ) : suggestedTools.length > 0 ? (
+              {suggestedTools.length > 0 ? (
                 <Link href={suggestedTools[0].href as any} asChild>
                   <PressableScale style={[styles.discoverCard, { backgroundColor: themeColors.goldSoft, borderColor: themeColors.goldBorder }]}>
                     <MaterialCommunityIcons name={suggestedTools[0].icon} size={24} color={themeColors.goldDeep} />
