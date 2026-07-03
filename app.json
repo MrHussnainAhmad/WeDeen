@@ -50,7 +50,6 @@
       ],
       "expo-router",
       "./plugins/withWedeenPrayerWidgetAndroid.js",
-      "./plugins/withWedeenPrayerLock.js",
       [
         "expo-notifications",
         {

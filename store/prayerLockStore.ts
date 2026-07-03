@@ -1,212 +1,191 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
 import { create } from 'zustand';
-import PrayerLock, { InstalledApp, LockResolvedEvent } from '@/services/prayerLock';
+import { EmitterSubscription } from 'react-native';
+import {
+  InstalledApp,
+  LockResolvedEvent,
+  startMonitoring,
+  stopMonitoring,
+  updateLockedPackages,
+  getInstalledApps,
+  checkUsageAccessPermission,
+  checkOverlayPermission,
+  checkBatteryOptimizationExempt,
+  addLockResolvedListener,
+} from '@/services/prayerLock';
 
-const STORAGE_KEY = 'prayer_lock_state';
+// ── State Shape ───────────────────────────────────────────────────────────────
 
-export interface UnlockEvent {
+type UnlockEvent = {
   packageName: string;
   method: 'prayed' | 'emergency' | 'declined';
   timestamp: number;
-}
-
-interface PermissionFlags {
-  usageStats: boolean;
-  overlay: boolean;
-  batteryExemption: boolean;
-}
-
-interface PrayerLockState {
-  // Persisted
-  lockedPackages: string[];
-  isMonitoringActive: boolean;
-  unlockHistory: UnlockEvent[];
-
-  // Volatile
-  installedApps: InstalledApp[];
-  permissions: PermissionFlags;
-  appsLoading: boolean;
-  permissionsChecked: boolean;
-  testTimerId: ReturnType<typeof setTimeout> | null;
-  testSecondsLeft: number | null; // null = not in test mode
-
-  // Actions
-  hydrate: () => Promise<void>;
-  toggleAppLock: (packageName: string) => Promise<void>;
-  setMonitoringActive: (active: boolean) => Promise<void>;
-  recordUnlockEvent: (event: LockResolvedEvent) => Promise<void>;
-  loadInstalledApps: () => Promise<void>;
-  checkAllPermissions: () => Promise<PermissionFlags>;
-  startTestMode: () => void;
-  stopTestMode: () => void;
-}
-
-// ── Persistence helpers ──────────────────────────────────────────────────────
-
-type PersistedSlice = {
-  lockedPackages: string[];
-  isMonitoringActive: boolean;
-  unlockHistory: UnlockEvent[];
 };
 
-async function loadPersistedState(): Promise<Partial<PersistedSlice>> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PersistedSlice) : {};
-  } catch {
-    return {};
-  }
-}
+type Permissions = {
+  usageAccess: boolean;     // PACKAGE_USAGE_STATS — needed for queryEvents polling
+  overlay: boolean;         // SYSTEM_ALERT_WINDOW — needed to launch overlay from service
+  batteryExemption: boolean;// Battery optimization exempt — keeps service alive
+};
 
-async function persistState(state: PersistedSlice) {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Non-fatal — in-memory state still works.
-  }
-}
+type PrayerLockState = {
+  lockedPackages: string[];
+  isMonitoringActive: boolean;
+  permissions: Permissions;
+  permissionsChecked: boolean;
+  installedApps: InstalledApp[];
+  appsLoading: boolean;
+  unlockHistory: UnlockEvent[];
+  testSecondsLeft: number | null;
+  testTimerRef: ReturnType<typeof setInterval> | null;
+  _subscription: EmitterSubscription | null;
+};
 
-// ── Store ────────────────────────────────────────────────────────────────────
+type PrayerLockActions = {
+  refreshPermissions: () => Promise<void>;
+  loadInstalledApps: () => Promise<void>;
+  toggleApp: (packageName: string) => void;
+  toggleMonitoring: () => Promise<void>;
+  addHistoryEvent: (event: LockResolvedEvent) => void;
+  clearHistory: () => void;
+  startTestMode: (durationSeconds?: number) => void;
+  stopTestMode: () => void;
+  _startListening: () => void;
+  _stopListening: () => void;
+};
 
-let unsubscribeLockResolved: (() => void) | null = null;
+// ── Store ─────────────────────────────────────────────────────────────────────
 
-export const usePrayerLockStore = create<PrayerLockState>((set, get) => ({
+export const usePrayerLockStore = create<PrayerLockState & PrayerLockActions>((set, get) => ({
   lockedPackages: [],
   isMonitoringActive: false,
-  unlockHistory: [],
-  installedApps: [],
-  permissions: { usageStats: false, overlay: false, batteryExemption: false },
-  appsLoading: false,
+  permissions: { usageAccess: false, overlay: false, batteryExemption: false },
   permissionsChecked: false,
-  testTimerId: null,
+  installedApps: [],
+  appsLoading: false,
+  unlockHistory: [],
   testSecondsLeft: null,
+  testTimerRef: null,
+  _subscription: null,
 
-  hydrate: async () => {
-    const saved = await loadPersistedState();
+  // ── Permissions ────────────────────────────────────────────────────────────
+
+  refreshPermissions: async () => {
+    const [usageAccess, overlay, batteryExemption] = await Promise.all([
+      checkUsageAccessPermission(),
+      checkOverlayPermission(),
+      checkBatteryOptimizationExempt(),
+    ]);
     set({
-      lockedPackages: saved.lockedPackages ?? [],
-      isMonitoringActive: saved.isMonitoringActive ?? false,
-      unlockHistory: saved.unlockHistory ?? [],
+      permissions: { usageAccess, overlay, batteryExemption },
+      permissionsChecked: true,
     });
 
-    // Re-subscribe to events on hydrate (handles cold-start).
-    if (unsubscribeLockResolved) unsubscribeLockResolved();
-    unsubscribeLockResolved = PrayerLock.onLockResolved((event) => {
-      get().recordUnlockEvent(event);
-    });
-
-    // If monitoring was active before app was killed, restart service.
-    if (saved.isMonitoringActive && saved.lockedPackages?.length) {
-      PrayerLock.startMonitoring(saved.lockedPackages);
-    }
-
-    // Check permissions on hydrate so UI gate works immediately.
-    await get().checkAllPermissions();
-  },
-
-  toggleAppLock: async (packageName) => {
-    const { lockedPackages, isMonitoringActive } = get();
-    const isLocked = lockedPackages.includes(packageName);
-    const next = isLocked
-      ? lockedPackages.filter((p) => p !== packageName)
-      : [...lockedPackages, packageName];
-
-    set({ lockedPackages: next });
-    await persistState({ lockedPackages: next, isMonitoringActive, unlockHistory: get().unlockHistory });
-
-    // Hot-update the service if running.
-    if (isMonitoringActive) {
-      PrayerLock.updateLockedPackages(next);
+    // If critical perms revoked, force monitoring off
+    if ((!usageAccess || !overlay) && get().isMonitoringActive) {
+      stopMonitoring();
+      get()._stopListening();
+      set({ isMonitoringActive: false });
     }
   },
 
-  setMonitoringActive: async (active) => {
-    const { lockedPackages, unlockHistory } = get();
-    set({ isMonitoringActive: active });
-    await persistState({ lockedPackages, isMonitoringActive: active, unlockHistory });
-
-    if (active) {
-      PrayerLock.startMonitoring(lockedPackages);
-    } else {
-      PrayerLock.stopMonitoring();
-    }
-  },
-
-  recordUnlockEvent: async (event) => {
-    const { lockedPackages, isMonitoringActive, unlockHistory } = get();
-    const entry: UnlockEvent = {
-      packageName: event.packageName,
-      method: event.method,
-      timestamp: event.timestamp,
-    };
-    // Keep latest 200 events.
-    const next = [entry, ...unlockHistory].slice(0, 200);
-    set({ unlockHistory: next });
-    await persistState({ lockedPackages, isMonitoringActive, unlockHistory: next });
-  },
+  // ── App list ───────────────────────────────────────────────────────────────
 
   loadInstalledApps: async () => {
     set({ appsLoading: true });
     try {
-      const apps = await PrayerLock.getInstalledApps();
-      // Sort alphabetically by name.
-      apps.sort((a, b) => a.name.localeCompare(b.name));
+      const apps = await getInstalledApps();
       set({ installedApps: apps });
     } catch (e) {
-      console.warn('[PrayerLock] getInstalledApps failed:', e);
+      console.error('[PrayerLockStore] loadInstalledApps error:', e);
     } finally {
       set({ appsLoading: false });
     }
   },
 
-  checkAllPermissions: async () => {
-    const [usageStats, overlay, batteryExemption] = await Promise.all([
-      PrayerLock.checkUsageStatsPermission(),
-      PrayerLock.checkOverlayPermission(),
-      PrayerLock.checkBatteryOptimizationExemption(),
-    ]);
-    const flags: PermissionFlags = { usageStats, overlay, batteryExemption };
-    set({ permissions: flags, permissionsChecked: true });
-    return flags;
+  // ── Lock toggle ────────────────────────────────────────────────────────────
+
+  toggleApp: (packageName: string) => {
+    const { lockedPackages, isMonitoringActive } = get();
+    const next = lockedPackages.includes(packageName)
+      ? lockedPackages.filter((p) => p !== packageName)
+      : [...lockedPackages, packageName];
+    set({ lockedPackages: next });
+    if (isMonitoringActive) updateLockedPackages(next);
   },
 
-  startTestMode: () => {
-    const { testTimerId, setMonitoringActive } = get();
-    // Clear any existing test timer.
-    if (testTimerId) clearTimeout(testTimerId);
+  // ── Monitoring ─────────────────────────────────────────────────────────────
 
-    const TEST_DURATION = 5 * 60; // 300 seconds
-    setMonitoringActive(true);
-    set({ testSecondsLeft: TEST_DURATION });
+  toggleMonitoring: async () => {
+    const { isMonitoringActive, lockedPackages, permissions } = get();
 
-    // Countdown tick every second.
-    let remaining = TEST_DURATION;
-    const tick = () => {
-      remaining -= 1;
-      if (remaining <= 0) {
-        get().stopTestMode();
+    if (isMonitoringActive) {
+      stopMonitoring();
+      get()._stopListening();
+      set({ isMonitoringActive: false });
+    } else {
+      // Both usage access AND overlay required to function
+      if (!permissions.usageAccess || !permissions.overlay) {
+        console.warn('[PrayerLockStore] Missing required permissions — cannot start monitoring');
         return;
       }
-      set({ testSecondsLeft: remaining });
-      const id = setTimeout(tick, 1000);
-      set({ testTimerId: id });
-    };
-    const id = setTimeout(tick, 1000);
-    set({ testTimerId: id });
+      startMonitoring(lockedPackages);
+      get()._startListening();
+      set({ isMonitoringActive: true });
+    }
+  },
+
+  // ── History ────────────────────────────────────────────────────────────────
+
+  addHistoryEvent: (event: LockResolvedEvent) => {
+    set((s) => ({
+      unlockHistory: [event, ...s.unlockHistory].slice(0, 100),
+    }));
+  },
+
+  clearHistory: () => set({ unlockHistory: [] }),
+
+  // ── Test mode ──────────────────────────────────────────────────────────────
+
+  startTestMode: (durationSeconds = 300) => {
+    const { lockedPackages, permissions } = get();
+    if (!permissions.usageAccess || !permissions.overlay || lockedPackages.length === 0) return;
+
+    startMonitoring(lockedPackages);
+    get()._startListening();
+    set({ isMonitoringActive: true, testSecondsLeft: durationSeconds });
+
+    const ref = setInterval(() => {
+      const left = get().testSecondsLeft;
+      if (left === null || left <= 1) {
+        get().stopTestMode();
+      } else {
+        set({ testSecondsLeft: left - 1 });
+      }
+    }, 1000);
+
+    set({ testTimerRef: ref });
   },
 
   stopTestMode: () => {
-    const { testTimerId } = get();
-    if (testTimerId) clearTimeout(testTimerId);
-    set({ testTimerId: null, testSecondsLeft: null });
-    get().setMonitoringActive(false);
+    const { testTimerRef } = get();
+    if (testTimerRef) clearInterval(testTimerRef);
+    stopMonitoring();
+    get()._stopListening();
+    set({ isMonitoringActive: false, testSecondsLeft: null, testTimerRef: null });
+  },
+
+  // ── Event listener ─────────────────────────────────────────────────────────
+
+  _startListening: () => {
+    get()._stopListening();
+    const sub = addLockResolvedListener((event) => {
+      get().addHistoryEvent(event);
+    });
+    set({ _subscription: sub });
+  },
+
+  _stopListening: () => {
+    get()._subscription?.remove();
+    set({ _subscription: null });
   },
 }));
-
-// Re-check permissions on app foreground (user may have just granted them).
-AppState.addEventListener('change', (nextState) => {
-  if (nextState === 'active') {
-    usePrayerLockStore.getState().checkAllPermissions().catch(() => undefined);
-  }
-});

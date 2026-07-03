@@ -1,33 +1,38 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 
 import { OrnateCard, SectionHeader } from '@/components/ui';
-import PrayerLock from '@/services/prayerLock';
-import { usePrayerLockStore } from '@/store/prayerLockStore';
+import { requestUsageAccessPermission, requestOverlayPermission, requestBatteryOptimizationExempt } from '@/services/prayerLock';
 import { colors, fonts, radius, shadow } from '@/theme/colors';
 import { useResponsive } from '@/theme/responsive';
+import { usePrayerLockStore } from '@/store/prayerLockStore';
+
+type InstalledApp = { name: string; packageName: string; icon: string | null };
+type UnlockEvent = { packageName: string; method: 'prayed' | 'emergency' | 'declined'; timestamp: number };
 
 // ── Permission Gate ──────────────────────────────────────────────────────────
 
 function PermissionRow({
   label,
   granted,
-  onRequest,
+  onGrant,
 }: {
   label: string;
   granted: boolean;
-  onRequest: () => void;
+  onGrant?: () => void;
 }) {
   return (
     <View style={pStyles.permRow}>
@@ -39,8 +44,8 @@ function PermissionRow({
         />
         <Text style={[pStyles.permLabel, !granted && { color: colors.danger }]}>{label}</Text>
       </View>
-      {!granted && (
-        <TouchableOpacity style={pStyles.grantBtn} onPress={onRequest}>
+      {!granted && onGrant && (
+        <TouchableOpacity style={pStyles.grantBtn} onPress={onGrant}>
           <Text style={pStyles.grantBtnText}>Grant</Text>
         </TouchableOpacity>
       )}
@@ -53,14 +58,14 @@ function PermissionRow({
 function AppRow({
   app,
   locked,
-  onToggle,
+  onPress,
 }: {
-  app: { name: string; packageName: string; icon: string | null };
+  app: InstalledApp;
   locked: boolean;
-  onToggle: () => void;
+  onPress: () => void;
 }) {
   return (
-    <Pressable style={[pStyles.appRow, locked && pStyles.appRowLocked]} onPress={onToggle}>
+    <Pressable style={[pStyles.appRow, locked && pStyles.appRowLocked]} onPress={onPress}>
       {app.icon ? (
         <Image source={{ uri: app.icon }} style={pStyles.appIcon} />
       ) : (
@@ -89,25 +94,55 @@ function AppRow({
 
 export default function LockTab() {
   const responsive = useResponsive();
-  const {
-    lockedPackages,
-    isMonitoringActive,
-    unlockHistory,
-    installedApps,
-    permissions,
-    permissionsChecked,
-    appsLoading,
-    hydrate,
-    toggleAppLock,
-    setMonitoringActive,
-    loadInstalledApps,
-    checkAllPermissions,
-    startTestMode,
-    stopTestMode,
-    testSecondsLeft,
-  } = usePrayerLockStore();
+
+  // Store selectors
+  const lockedPackages = usePrayerLockStore((s) => s.lockedPackages);
+  const isMonitoringActive = usePrayerLockStore((s) => s.isMonitoringActive);
+  const unlockHistory = usePrayerLockStore((s) => s.unlockHistory);
+  const installedApps = usePrayerLockStore((s) => s.installedApps);
+  const permissions = usePrayerLockStore((s) => s.permissions);
+  const permissionsChecked = usePrayerLockStore((s) => s.permissionsChecked);
+  const appsLoading = usePrayerLockStore((s) => s.appsLoading);
+  const testSecondsLeft = usePrayerLockStore((s) => s.testSecondsLeft);
+
+  // Store actions
+  const refreshPermissions = usePrayerLockStore((s) => s.refreshPermissions);
+  const loadInstalledApps = usePrayerLockStore((s) => s.loadInstalledApps);
+  const toggleApp = usePrayerLockStore((s) => s.toggleApp);
+  const toggleMonitoring = usePrayerLockStore((s) => s.toggleMonitoring);
+  const startTestMode = usePrayerLockStore((s) => s.startTestMode);
+  const stopTestMode = usePrayerLockStore((s) => s.stopTestMode);
 
   const isTestMode = testSecondsLeft !== null;
+
+  // ── Init on mount ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    refreshPermissions();
+
+    // Re-check permissions whenever app comes back to foreground
+    // (user may have toggled accessibility in settings and come back)
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshPermissions();
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Load apps once usage access + overlay granted
+  useEffect(() => {
+    const allGranted = permissions.usageAccess && permissions.overlay;
+    if (allGranted && installedApps.length === 0) {
+      loadInstalledApps();
+    }
+  }, [permissions.usageAccess, permissions.overlay]);
+
+  // ── Local UI state ─────────────────────────────────────────────────────────
+
+  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'apps' | 'history'>('apps');
+  const [batteryGrantTapped, setBatteryGrantTapped] = useState(false);
+
+  const allPermsGranted = permissions.usageAccess && permissions.overlay;
 
   const formatCountdown = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -115,37 +150,16 @@ export default function LockTab() {
     return `${m}:${s}`;
   };
 
-  const [search, setSearch] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [tab, setTab] = useState<'apps' | 'history'>('apps');
-
-  const allPermsGranted =
-    permissions.usageStats && permissions.overlay && permissions.batteryExemption;
-
-  useEffect(() => {
-    hydrate();
-  }, []);
-
-  useEffect(() => {
-    if (allPermsGranted && installedApps.length === 0) {
-      loadInstalledApps();
-    }
-  }, [allPermsGranted]);
-
-  const filteredApps = useMemo(() => {
+  const filteredApps = (() => {
     if (!search.trim()) return installedApps;
     const q = search.toLowerCase();
     return installedApps.filter(
       (a) => a.name.toLowerCase().includes(q) || a.packageName.toLowerCase().includes(q)
     );
-  }, [installedApps, search]);
+  })();
 
-  const handleMonitoringToggle = async (value: boolean) => {
-    if (value && !allPermsGranted) {
-      await checkAllPermissions();
-      return;
-    }
-    await setMonitoringActive(value);
+  const handleMonitoringToggle = () => {
+    toggleMonitoring();
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -200,7 +214,7 @@ export default function LockTab() {
             <TouchableOpacity
               style={[pStyles.testBtn, !lockedPackages.length && pStyles.testBtnDisabled]}
               disabled={!lockedPackages.length}
-              onPress={startTestMode}
+              onPress={() => startTestMode(300)}
             >
               <Ionicons name="flask-outline" size={16} color={lockedPackages.length ? colors.gold : colors.muted} />
               <Text style={[pStyles.testBtnText, !lockedPackages.length && { color: colors.muted }]}>
@@ -215,27 +229,36 @@ export default function LockTab() {
           <OrnateCard index={0} style={pStyles.permCard}>
             <SectionHeader
               title="Permissions Required"
-              subtitle="All three needed before monitoring can start"
+              subtitle="All needed before monitoring can start"
               icon={<Ionicons name="shield-outline" size={18} color={colors.danger} />}
             />
+
             <PermissionRow
               label="Usage Access"
-              granted={permissions.usageStats}
-              onRequest={PrayerLock.requestUsageStatsPermission}
+              granted={permissions.usageAccess}
+              onGrant={requestUsageAccessPermission}
             />
             <PermissionRow
               label="Display Over Other Apps"
               granted={permissions.overlay}
-              onRequest={PrayerLock.requestOverlayPermission}
+              onGrant={requestOverlayPermission}
             />
             <PermissionRow
               label="Battery Optimization Exempt"
               granted={permissions.batteryExemption}
-              onRequest={PrayerLock.requestBatteryOptimizationExemption}
+              onGrant={() => {
+                setBatteryGrantTapped(true);
+                requestBatteryOptimizationExempt();
+              }}
             />
+            {batteryGrantTapped && !permissions.batteryExemption && (
+              <Text style={pStyles.oemHint}>
+                If no dialog appeared: find Battery › Battery usage › Unrestricted for this app.
+              </Text>
+            )}
             <TouchableOpacity
               style={pStyles.recheckBtn}
-              onPress={() => checkAllPermissions()}
+              onPress={refreshPermissions}
             >
               <Ionicons name="refresh" size={14} color={colors.primary} />
               <Text style={pStyles.recheckText}>Re-check permissions</Text>
@@ -268,13 +291,15 @@ export default function LockTab() {
           <OrnateCard index={1} padded={false}>
             <View style={pStyles.searchRow}>
               <Ionicons name="search" size={16} color={colors.muted} />
-              <Text
-                style={pStyles.searchHint}
-                // No TextInput — use a placeholder until search state wired up
-                // in a real implementation, swap this for <TextInput>.
-              >
-                {search || 'Type to filter…'}
-              </Text>
+              <TextInput
+                style={pStyles.searchInput}
+                placeholder="Filter apps…"
+                placeholderTextColor={colors.faint}
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
             </View>
 
             {appsLoading ? (
@@ -287,7 +312,7 @@ export default function LockTab() {
                 <Ionicons name="lock-open-outline" size={22} color={colors.primary} />
                 <View style={pStyles.emptyTextWrap}>
                   <Text style={pStyles.emptyTitle}>Permissions needed</Text>
-                  <Text style={pStyles.emptySubtitle}>Grant all three above, then app list loads.</Text>
+                  <Text style={pStyles.emptySubtitle}>Grant both above, then app list loads.</Text>
                 </View>
               </View>
             ) : filteredApps.length === 0 ? (
@@ -304,7 +329,7 @@ export default function LockTab() {
                   key={app.packageName}
                   app={app}
                   locked={lockedPackages.includes(app.packageName)}
-                  onToggle={() => toggleAppLock(app.packageName)}
+                  onPress={() => toggleApp(app.packageName)}
                 />
               ))
             )}
@@ -437,6 +462,15 @@ const pStyles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   recheckText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
+  oemHint: {
+    color: colors.muted,
+    fontSize: 11.5,
+    fontWeight: '600',
+    lineHeight: 16,
+    marginTop: 4,
+    marginBottom: 2,
+    fontStyle: 'italic',
+  },
   // Tab bar
   tabBar: {
     flexDirection: 'row',
@@ -463,6 +497,11 @@ const pStyles = StyleSheet.create({
     padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
   },
   searchHint: { color: colors.faint, fontSize: 13, flex: 1 },
   appRow: {
