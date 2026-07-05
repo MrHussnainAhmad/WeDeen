@@ -180,6 +180,20 @@ export const usePrayerLockStore = create<PrayerLockState & PrayerLockActions>((s
     get()._stopListening();
     const sub = addLockResolvedListener((event) => {
       get().addHistoryEvent(event);
+      
+      // Handle unlock logic based on resolution method
+      if (event.method === 'emergency') {
+        // Unlock only the specific app
+        const { lockedPackages, isMonitoringActive } = get();
+        const next = lockedPackages.filter((p) => p !== event.packageName);
+        set({ lockedPackages: next });
+        if (isMonitoringActive) updateLockedPackages(next);
+      } else if (event.method === 'prayed') {
+        // Unlock all apps
+        set({ lockedPackages: [] });
+        const { isMonitoringActive } = get();
+        if (isMonitoringActive) updateLockedPackages([]);
+      }
     });
     set({ _subscription: sub });
   },
