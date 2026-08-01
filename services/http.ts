@@ -1,7 +1,13 @@
 import axios from 'axios';
 
-// The local backend defaults to port 5000 (see ../backend/.env.example).
-const API_BASE_URL = 'http://localhost:5000/api';
+const DEPLOYED_API_BASE_URL = 'https://wedeen-backend.vercel.app/api';
+
+const getApiBaseUrl = () => {
+  const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  return configuredUrl || DEPLOYED_API_BASE_URL;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Log the API base URL in development to help debug
 if (__DEV__) {
